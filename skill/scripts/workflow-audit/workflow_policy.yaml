@@ -1,0 +1,43 @@
+roles:
+  architect:
+    can_delegate_to: [worker_programmer, integration_test_agent, documenting_agent]
+    allowed_message_types: [task_request, verdict, clarification]
+
+  worker_programmer:
+    can_delegate_to: [code_reviewer, unit_test_agent]
+    allowed_message_types: [implementation_result, review_request, test_request, clarification, review_result, test_result, blocker_report]
+
+  code_reviewer:
+    can_delegate_to: []
+    allowed_message_types: [review_result, clarification]
+
+  unit_test_agent:
+    can_delegate_to: []
+    allowed_message_types: [test_result, clarification]
+
+  integration_test_agent:
+    can_delegate_to: []
+    allowed_message_types: [test_result, clarification]
+
+  documenting_agent:
+    can_delegate_to: []
+    allowed_message_types: [documentation_update, clarification]
+
+rules:
+  - id: no_worker_to_worker_delegation
+    forbid_delegation:
+      - worker_programmer->worker_programmer
+
+  - id: every_delegation_must_be_bound
+    requires_for_each_delegation:
+      - binding.delegation_runtime_agent
+      - binding.delegation_channel
+
+  - id: implementation_requires_review_and_test
+    when_workflow_step: implementation
+    requires_child_steps:
+      - review
+      - test
+
+  - id: every_delegation_must_finish
+    final_status_must_be_one_of: [completed, failed, rejected]

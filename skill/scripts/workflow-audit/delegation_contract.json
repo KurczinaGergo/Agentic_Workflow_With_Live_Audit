@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agentic Workflow Delegation Contract",
+  "type": "object",
+  "required": [
+    "delegation_id",
+    "requested_by_agent_id",
+    "requested_by_role",
+    "target_role",
+    "purpose",
+    "workflow_step",
+    "status"
+  ],
+  "properties": {
+    "delegation_id": {
+      "type": "string"
+    },
+    "requested_by_agent_id": {
+      "type": "string"
+    },
+    "requested_by_role": {
+      "type": "string"
+    },
+    "logical_parent_agent_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "target_role": {
+      "type": "string"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "workflow_step": {
+      "type": "string"
+    },
+    "expected_outputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "input_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string"
+    },
+    "policy_context": {
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agentic Workflow Channel Contract",
+  "type": "object",
+  "required": [
+    "channel_id",
+    "channel_type",
+    "logical_source_agent_id",
+    "logical_target_agent_id",
+    "runtime_created_by",
+    "purpose"
+  ],
+  "properties": {
+    "channel_id": {
+      "type": "string"
+    },
+    "channel_type": {
+      "type": "string"
+    },
+    "created_for_relationship": {
+      "type": "string"
+    },
+    "logical_source_agent_id": {
+      "type": "string"
+    },
+    "logical_target_agent_id": {
+      "type": "string"
+    },
+    "runtime_created_by": {
+      "type": "string"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "allowed_message_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "visibility": {
+      "type": "string"
+    },
+    "opened_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "closed_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

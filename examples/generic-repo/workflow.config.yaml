@@ -1,0 +1,26 @@
+# Generic language-neutral profile.
+# This profile keeps workflow artifacts under .workflow/ so it can be added to most repos.
+
+# Copyable example:
+# workflow_name: FEATURE_V1
+# task_root: .workflow/tasks
+# dod_root: .workflow/dod
+# audit_root: .workflow/audit
+# architecture_docs: []
+# decision_docs: []
+# project_context_docs: []
+
+workflow_name: FEATURE_V1
+task_root: .workflow/tasks
+dod_root: .workflow/dod
+audit_root: .workflow/audit
+architecture_docs: []
+decision_docs: []
+project_context_docs: []
+test_commands: []
+# Optional override. Leave null to use the bundled default policy next to the audit scripts.
+# role_policy: D:/Live_Audit_Log/skill/scripts/workflow-audit/workflow_policy.yaml
+role_policy: null
+artifact_naming:
+  task_file_pattern: "{number}-{slug}.md"
+  dod_file_pattern: "DOD_{task_slug}.md"

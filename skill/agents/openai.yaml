@@ -1,0 +1,3 @@
+display_name: Agentic Workflow Audit
+short_description: Run audited multi-agent implementation workflows with live replayable logs.
+default_prompt: Use the agentic workflow audit skill to plan, delegate, implement, review, test, and produce live audit artifacts for this repository.

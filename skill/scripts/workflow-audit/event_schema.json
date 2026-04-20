@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agentic Workflow Audit Event",
+  "type": "object",
+  "required": [
+    "event_id",
+    "run_id",
+    "timestamp",
+    "event_type"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "source_agent_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "target_agent_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "runtime_parent_agent_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "logical_parent_agent_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "requested_by_agent_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "delegation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "channel_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workflow_step": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "message_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

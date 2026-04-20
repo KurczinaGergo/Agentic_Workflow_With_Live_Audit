@@ -1,0 +1,38 @@
+# Agentic workflow settings.
+# Copy this file to the root of a target repository as workflow.config.yaml.
+
+# Generic copyable example:
+# workflow_name: FEATURE_V1
+# task_root: .workflow/tasks
+# dod_root: .workflow/dod
+# audit_root: .workflow/audit
+# architecture_docs: []
+# decision_docs: []
+# project_context_docs: []
+# test_commands: []
+
+# WorkTrace-style copyable example:
+# workflow_name: FEATURE_V1
+# task_root: docs/tasks
+# dod_root: docs/dod
+# audit_root: docs/Audit
+# architecture_docs: [docs/architecture.md]
+# decision_docs: [docs/decisions]
+# project_context_docs: [docs/project-documents]
+# test_commands:
+#   - dotnet test
+
+workflow_name: FEATURE_V1
+task_root: .workflow/tasks
+dod_root: .workflow/dod
+audit_root: .workflow/audit
+architecture_docs: []
+decision_docs: []
+project_context_docs: []
+test_commands: []
+# Optional override. Leave null to use the bundled default policy next to the audit scripts.
+# role_policy: D:/Live_Audit_Log/skill/scripts/workflow-audit/workflow_policy.yaml
+role_policy: null
+artifact_naming:
+  task_file_pattern: "{number}-{slug}.md"
+  dod_file_pattern: "DOD_{task_slug}.md"
