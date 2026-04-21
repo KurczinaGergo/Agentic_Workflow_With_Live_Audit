@@ -44,6 +44,14 @@ def write_log(lines: list[str]) -> Path:
     return log_path
 
 
+def sample_events() -> list[dict]:
+    return [json.loads(line) for line in SAMPLE.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def write_events(events: list[dict]) -> Path:
+    return write_log([json.dumps(event) for event in events])
+
+
 def write_audit_workflow(name: str, lines: list[str], transcript_lines: list[str] | None = None) -> Path:
     audit_dir = AUDIT_ROOT / name
     if audit_dir.exists():
@@ -107,6 +115,170 @@ class WorkflowAuditToolsTests(unittest.TestCase):
         result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("forbidden logical delegation", result.stdout)
+
+    def test_prebind_delegation_requires_target_role(self) -> None:
+        events = sample_events()
+        del events[6]["payload"]["target_role"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing payload.target_role", result.stdout)
+
+    def test_prebind_delegation_requires_requested_by_role(self) -> None:
+        events = sample_events()
+        del events[6]["payload"]["requested_by_role"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing payload.requested_by_role", result.stdout)
+
+    def test_prebind_delegation_requires_later_runtime_binding(self) -> None:
+        events = [
+            event
+            for event in sample_events()
+            if not (event["delegation_id"] == "del_review_001" and event["event_type"] == "binding.delegation_runtime_agent")
+        ]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("pre-bind delegation missing runtime agent binding", result.stdout)
+
+    def test_prebind_delegation_requires_matching_bound_role(self) -> None:
+        events = sample_events()
+        binding = next(
+            event
+            for event in events
+            if event["delegation_id"] == "del_review_001"
+            and event["event_type"] == "binding.delegation_runtime_agent"
+        )
+        binding["payload"]["role"] = "unit_test_agent"
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime binding role mismatch", result.stdout)
+
+    def test_runtime_target_required_event_cannot_have_null_target_agent(self) -> None:
+        events = sample_events()
+        spawned = next(
+            event
+            for event in events
+            if event["delegation_id"] == "del_review_001"
+            and event["event_type"] == "runtime.agent.spawned"
+        )
+        spawned["target_agent_id"] = None
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime.agent.spawned requires target_agent_id", result.stdout)
+
+    def test_architect_bootstrap_from_main_context_passes(self) -> None:
+        events = [
+            {
+                "event_id": "evt_boot_001",
+                "run_id": "run_bootstrap",
+                "timestamp": "2026-04-21T10:00:00Z",
+                "event_type": "delegation.created",
+                "source_agent_id": "codex_main",
+                "target_agent_id": None,
+                "runtime_parent_agent_id": "codex_main",
+                "logical_parent_agent_id": "codex_main",
+                "requested_by_agent_id": "codex_main",
+                "delegation_id": "del_architect_001",
+                "channel_id": None,
+                "workflow_step": "architecture",
+                "message_type": "task_request",
+                "payload": {
+                    "requested_by_role": "main_context",
+                    "target_role": "architect",
+                    "role": "architect",
+                    "purpose": "Bootstrap the workflow architect",
+                    "status": "pending_runtime_binding",
+                },
+            },
+            {
+                "event_id": "evt_boot_002",
+                "run_id": "run_bootstrap",
+                "timestamp": "2026-04-21T10:00:01Z",
+                "event_type": "runtime.agent.spawned",
+                "source_agent_id": "codex_main",
+                "target_agent_id": "architect_1",
+                "runtime_parent_agent_id": "codex_main",
+                "logical_parent_agent_id": "codex_main",
+                "requested_by_agent_id": "codex_main",
+                "delegation_id": "del_architect_001",
+                "channel_id": None,
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {"role": "architect"},
+            },
+            {
+                "event_id": "evt_boot_003",
+                "run_id": "run_bootstrap",
+                "timestamp": "2026-04-21T10:00:02Z",
+                "event_type": "binding.delegation_runtime_agent",
+                "source_agent_id": "codex_main",
+                "target_agent_id": "architect_1",
+                "runtime_parent_agent_id": "codex_main",
+                "logical_parent_agent_id": "codex_main",
+                "requested_by_agent_id": "codex_main",
+                "delegation_id": "del_architect_001",
+                "channel_id": None,
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {"role": "architect"},
+            },
+            {
+                "event_id": "evt_boot_004",
+                "run_id": "run_bootstrap",
+                "timestamp": "2026-04-21T10:00:03Z",
+                "event_type": "runtime.channel.created",
+                "source_agent_id": "codex_main",
+                "target_agent_id": "architect_1",
+                "runtime_parent_agent_id": "codex_main",
+                "logical_parent_agent_id": "codex_main",
+                "requested_by_agent_id": "codex_main",
+                "delegation_id": "del_architect_001",
+                "channel_id": "ch_main_architect_1",
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {"owners": ["codex_main", "architect_1"]},
+            },
+            {
+                "event_id": "evt_boot_005",
+                "run_id": "run_bootstrap",
+                "timestamp": "2026-04-21T10:00:04Z",
+                "event_type": "binding.delegation_channel",
+                "source_agent_id": "codex_main",
+                "target_agent_id": "architect_1",
+                "runtime_parent_agent_id": "codex_main",
+                "logical_parent_agent_id": "codex_main",
+                "requested_by_agent_id": "codex_main",
+                "delegation_id": "del_architect_001",
+                "channel_id": "ch_main_architect_1",
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {},
+            },
+            {
+                "event_id": "evt_boot_006",
+                "run_id": "run_bootstrap",
+                "timestamp": "2026-04-21T10:00:05Z",
+                "event_type": "delegation.completed",
+                "source_agent_id": "architect_1",
+                "target_agent_id": "codex_main",
+                "runtime_parent_agent_id": "codex_main",
+                "logical_parent_agent_id": "codex_main",
+                "requested_by_agent_id": "codex_main",
+                "delegation_id": "del_architect_001",
+                "channel_id": "ch_main_architect_1",
+                "workflow_step": "architecture",
+                "message_type": "verdict",
+                "payload": {"status": "completed"},
+            },
+        ]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_missing_terminal_status_fails(self) -> None:
         lines = SAMPLE.read_text(encoding="utf-8").splitlines()

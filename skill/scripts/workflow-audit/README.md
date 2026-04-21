@@ -52,6 +52,8 @@ If an appended workflow event or channel message omits `timestamp`, the append h
 
 Reconstruction is not acceptable for new runs. `workflow_log.jsonl` and `channels/*.jsonl` are expected to be append-only live artifacts written during execution.
 
+Pre-bind `delegation.created` events are allowed only as complete logical records. Include `payload.requested_by_role`, `payload.target_role`, compatibility `payload.role` matching `target_role`, and `payload.status` set to `created` or `pending_runtime_binding`; the same `delegation_id` must later receive matching runtime-agent and channel bindings. Later runtime, binding, logical message, and terminal events must set `target_agent_id`.
+
 ## Validation And Derived Artifacts
 
 ```powershell

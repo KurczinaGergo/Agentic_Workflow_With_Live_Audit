@@ -115,6 +115,7 @@ The workflow separates runtime control from logical ownership.
 - writes `runtime.*` and `binding.*` events
 - observes workflow state
 - handles recovery
+- bootstraps the Architect through a `main_context -> architect` delegation
 
 The Architect owns logical delivery:
 
@@ -157,6 +158,8 @@ Important event families:
 - `logical.message.sent`: meaningful agent-to-agent communication
 
 `delegation_id` is the primary trace key across events, channels, reports, and acceptance records.
+
+Pre-bind `delegation.created` events are valid logical records, not placeholders. They may use `target_agent_id: null` only when `payload.requested_by_role`, `payload.target_role`, compatibility `payload.role`, and a created/pending status are present, and a later runtime binding resolves the same `delegation_id`. Later runtime, binding, logical message, and terminal events must set `target_agent_id`.
 
 ## Generate Audit Artifacts
 

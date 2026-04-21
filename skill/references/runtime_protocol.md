@@ -5,7 +5,7 @@ This document defines the reusable runtime communication and logical audit contr
 ## Scope
 
 - This is a documentation and audit contract, not a runtime ACL implementation.
-- The main Codex session acts as `MainContext`.
+- The main Codex session acts as `MainContext`, with logical role `main_context`.
 - `MainContext` is the only entity allowed to spawn agents, create private channels, close private channels, and observe all workflow traffic.
 - The default workflow roles are Architect, SW Technical Engineer, Code Review, Unit Tester, Integration Test, and Documenting.
 - New audit artifacts live under the configured `audit_root/<workflow_name>/`.
@@ -139,17 +139,21 @@ Each line in `channels/<channel_id>.jsonl` uses this envelope:
 ## Default Policy Rules
 
 - Only `MainContext` may emit `runtime.*` and `binding.*` events.
-- Each `delegation.created` must have both `binding.delegation_runtime_agent` and `binding.delegation_channel`.
+- `main_context` may delegate only to `architect`.
+- Each `delegation.created` must include `requested_by_role`, `target_role`, `role` matching `target_role`, and `status` set to `created` or `pending_runtime_binding`.
+- A pre-bind `delegation.created` may use `target_agent_id: null` only when it later receives a matching `binding.delegation_runtime_agent`.
+- All later runtime, binding, logical message, and terminal events for that delegation must set `target_agent_id`; channel creation and channel binding events target the bound runtime agent.
+- Each `delegation.created` must have `runtime.agent.spawned`, `binding.delegation_runtime_agent`, `runtime.channel.created`, and `binding.delegation_channel`.
 - No valid logical message may exist without its parent delegation.
 - Architect may delegate only to `worker_programmer`, `integration_test_agent`, and `documenting_agent`.
 - SW Technical Engineer may delegate only to `code_reviewer` and `unit_test_agent`.
-- Review and test child delegations must complete before an implementation delegation completes successfully.
+- Review and test child delegations must include workflow-level `logical.message.sent` request and result events, then complete before an implementation delegation completes successfully.
 - Every delegation must end in `completed`, `failed`, or `rejected`.
 
 ## Canonical Flow
 
 1. `MainContext` initializes the audit folder.
-2. `MainContext` emits the Architect delegation when a workflow run is requested.
+2. `MainContext` emits the Architect delegation when a workflow run is requested, using `requested_by_role: "main_context"` and `target_role: "architect"`.
 3. The Architect creates task files under `task_root/<workflow_name>/`.
 4. The Architect emits `delegation.created` for each implementation task.
 5. `MainContext` spawns the engineer and binds the Architect<->Engineer channel.

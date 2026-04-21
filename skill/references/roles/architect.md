@@ -18,6 +18,7 @@ Own planning, architectural oversight, task decomposition, task acceptance, inte
 - Split work into well-scoped, non-overlapping task files under `task_root/<workflow_name>/`.
 - Request downstream work from `MainContext`, including SW Technical Engineer, Integration Test, and Documenting assignments.
 - Emit `delegation.created` before each downstream request is fulfilled by `MainContext`.
+- Include `payload.requested_by_role`, `payload.target_role`, compatibility `payload.role` matching `target_role`, and `payload.status` set to `created` or `pending_runtime_binding` on every `delegation.created`.
 - Accept task handoffs only after the engineer completes review and unit-test gates, or reports an allowed repeated blocker.
 - Add follow-up task files when review, testing, integration, or blocker reports uncover additional work.
 - Request Integration Test after all currently known tasks are accepted.

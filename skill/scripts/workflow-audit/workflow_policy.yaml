@@ -1,4 +1,8 @@
 roles:
+  main_context:
+    can_delegate_to: [architect]
+    allowed_message_types: [task_request, clarification]
+
   architect:
     can_delegate_to: [worker_programmer, integration_test_agent, documenting_agent]
     allowed_message_types: [task_request, verdict, clarification]
@@ -30,7 +34,9 @@ rules:
 
   - id: every_delegation_must_be_bound
     requires_for_each_delegation:
+      - runtime.agent.spawned
       - binding.delegation_runtime_agent
+      - runtime.channel.created
       - binding.delegation_channel
 
   - id: implementation_requires_review_and_test

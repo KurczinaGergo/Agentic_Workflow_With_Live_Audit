@@ -8,6 +8,17 @@ import yaml
 
 
 TERMINAL_EVENT_TYPES = {"delegation.completed", "delegation.failed", "delegation.rejected"}
+CREATED_STATUSES = {"created", "pending_runtime_binding"}
+TARGET_REQUIRED_EVENT_TYPES = {
+    "runtime.agent.spawned",
+    "runtime.agent.terminated",
+    "runtime.channel.created",
+    "runtime.channel.closed",
+    "binding.delegation_runtime_agent",
+    "binding.delegation_channel",
+    "logical.message.sent",
+    *TERMINAL_EVENT_TYPES,
+}
 
 
 def load_events(path: Path) -> list[dict]:
@@ -56,6 +67,13 @@ def runtime_agent_for_delegation(events: list[dict]) -> str | None:
     return None
 
 
+def runtime_binding_for_delegation(events: list[dict]) -> dict | None:
+    for event in events:
+        if event["event_type"] == "binding.delegation_runtime_agent":
+            return event
+    return None
+
+
 def terminal_status(events: list[dict]) -> str | None:
     terminal_events = [event for event in events if event["event_type"] in TERMINAL_EVENT_TYPES]
     if not terminal_events:
@@ -98,14 +116,49 @@ def validate(events: list[dict], policy: dict) -> list[str]:
 
     role_policy = policy.get("roles", {})
 
+    for event in events:
+        if event["event_type"] in TARGET_REQUIRED_EVENT_TYPES and not event.get("target_agent_id"):
+            delegation_id = event.get("delegation_id")
+            violations.append(
+                f"[{delegation_id}] {event['event_type']} requires target_agent_id"
+            )
+
     for delegation_id, event in delegations.items():
-        requester_role = event.get("payload", {}).get("requested_by_role") or roles.get(event.get("source_agent_id"))
-        target_role = event.get("payload", {}).get("target_role")
+        payload = event.get("payload", {})
+        requester_role = payload.get("requested_by_role")
+        target_role = payload.get("target_role")
+        compatibility_role = payload.get("role")
+        status = payload.get("status")
+
+        if not requester_role:
+            violations.append(f"[{delegation_id}] delegation.created missing payload.requested_by_role")
+        if not target_role:
+            violations.append(f"[{delegation_id}] delegation.created missing payload.target_role")
+        if compatibility_role != target_role:
+            violations.append(
+                f"[{delegation_id}] delegation.created payload.role must match target_role: {compatibility_role} -> {target_role}"
+            )
+        if status not in CREATED_STATUSES:
+            violations.append(
+                f"[{delegation_id}] delegation.created invalid status: {status}"
+            )
+
         allowed = set(role_policy.get(requester_role, {}).get("can_delegate_to", []))
         if target_role not in allowed:
             violations.append(
                 f"[{delegation_id}] forbidden logical delegation: {requester_role} -> {target_role}"
             )
+
+        delegation_events = grouped_by_delegation[delegation_id]
+        binding = runtime_binding_for_delegation(delegation_events)
+        if event.get("target_agent_id") is None and not binding:
+            violations.append(f"[{delegation_id}] pre-bind delegation missing runtime agent binding")
+        if binding:
+            bound_role = binding.get("payload", {}).get("role")
+            if bound_role != target_role:
+                violations.append(
+                    f"[{delegation_id}] runtime binding role mismatch: {target_role} -> {bound_role}"
+                )
 
     for rule in policy.get("rules", []):
         for edge in rule.get("forbid_delegation", []):
@@ -123,7 +176,8 @@ def validate(events: list[dict], policy: dict) -> list[str]:
         if not required_events:
             continue
 
-        for delegation_id, delegation_events in grouped_by_delegation.items():
+        for delegation_id in delegations:
+            delegation_events = grouped_by_delegation[delegation_id]
             present = {event["event_type"] for event in delegation_events}
             for required_event in required_events:
                 if required_event not in present:
@@ -152,7 +206,8 @@ def validate(events: list[dict], policy: dict) -> list[str]:
         if "final_status_must_be_one_of" in rule:
             allowed_final_statuses.update(rule["final_status_must_be_one_of"])
 
-    for delegation_id, delegation_events in grouped_by_delegation.items():
+    for delegation_id in delegations:
+        delegation_events = grouped_by_delegation[delegation_id]
         status = terminal_status(delegation_events)
         if status is None:
             violations.append(f"[{delegation_id}] no terminal delegation event found")
