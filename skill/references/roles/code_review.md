@@ -22,6 +22,10 @@ Called by `MainContext` after the SW Technical Engineer requests review. `MainCo
 - Communicate only with the assigned engineer inside the Engineer<->Review channel.
 - Do not create or assign new tasks directly.
 - Route broader concerns through the engineer handoff so the Architect can decide on follow-up work.
+- Report the real review state; do not reduce findings, soften risk, or accept simpler evidence because it makes the audit cleaner.
+- Treat audit JSONL as append-only source-of-truth evidence.
+- Do not request or approve edits to `skill/`, `workflow_log.jsonl`, or `channels/*.jsonl` unless `MainContext` has logged a developer-authorized `audit.protection.override`.
+- If a failed audit is found, request implementation or workflow follow-up changes instead of audit history rewrites.
 
 ## Outputs
 

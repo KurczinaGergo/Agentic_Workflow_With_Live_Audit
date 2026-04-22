@@ -14,7 +14,19 @@ This document defines the reusable runtime communication and logical audit contr
 - Acceptance or Definition of Done records live under `dod_root/<workflow_name>/`.
 - Audit logging must begin before the first spawned workflow agent or private channel is created.
 - `workflow_log.jsonl` and `channels/*.jsonl` must be written live as the workflow executes. Post-run reconstruction is not acceptable for new runs.
+- `workflow_log.jsonl` and `channels/*.jsonl` are append-only source-of-truth evidence. Do not rewrite, reorder, redact, or backfill prior records during a normal workflow.
+- Audit visibility must not change engineering behavior. Agents must not reduce task count, merge naturally distinct workstreams, skip safe parallelism, narrow verification, or choose simpler implementation paths for audit neatness.
+- The skill package is protected during normal agentic workflows. Workflow agents must not edit `skill/` unless the developer explicitly instructed work on this skill.
 - Use the bundled `scripts/workflow-audit/` helpers when native runtime hooks are not available.
+
+## Audit Source Of Truth
+
+- The audit ledger is evidence, not implementation material.
+- The workflow must optimize for the real situation: speed, precision, ownership boundaries, verification quality, and faithful reporting.
+- Failed audits must be fixed by changing the implementation, adding follow-up work, or recording an explicit developer-authorized audit-maintenance task.
+- Generated artifacts such as Mermaid diagrams, delegation reports, and HTML viewers are derived from the canonical JSONL ledger and may be regenerated.
+- Rewriting canonical audit JSONL without explicit developer authorization invalidates the workflow.
+- Protected edits require `MainContext` to emit `audit.protection.override` before the edit begins.
 
 ## Configuration
 
@@ -93,6 +105,7 @@ Each event in `workflow_log.jsonl` uses this envelope:
 - `binding.delegation_runtime_agent`
 - `binding.delegation_channel`
 - `logical.message.sent`
+- `audit.protection.override`
 
 ## Payload Conventions
 
@@ -112,6 +125,9 @@ Expected payload fields when applicable:
 - `attempt`: 1-based attempt count
 - `blocker_key`: stable key for repeated unit-test blockers
 - `acceptance_rationale`: required when a review, test, or handoff is accepted
+- `authorized_by`: must be `developer` for `audit.protection.override`
+- `scope`: `skill`, `audit_log`, or an exact protected path for `audit.protection.override`
+- `reason`: non-empty developer authorization rationale for `audit.protection.override`
 
 ## Channel Transcript Envelope
 
@@ -149,12 +165,14 @@ Each line in `channels/<channel_id>.jsonl` uses this envelope:
 - SW Technical Engineer may delegate only to `code_reviewer` and `unit_test_agent`.
 - Review and test child delegations must include workflow-level `logical.message.sent` request and result events, then complete before an implementation delegation completes successfully.
 - Every delegation must end in `completed`, `failed`, or `rejected`.
+- Only `MainContext` may emit `audit.protection.override`.
+- Protected `skill/`, `workflow_log.jsonl`, or `channels/*.jsonl` artifact refs require a valid developer-authorized protection override.
 
 ## Canonical Flow
 
 1. `MainContext` initializes the audit folder.
 2. `MainContext` emits the Architect delegation when a workflow run is requested, using `requested_by_role: "main_context"` and `target_role: "architect"`.
-3. The Architect creates task files under `task_root/<workflow_name>/`.
+3. The Architect creates task files under `task_root/<workflow_name>/` with a short decomposition rationale explaining the split or why work was intentionally kept together.
 4. The Architect emits `delegation.created` for each implementation task.
 5. `MainContext` spawns the engineer and binds the Architect<->Engineer channel.
 6. The engineer implements the task and emits `implementation_result`.

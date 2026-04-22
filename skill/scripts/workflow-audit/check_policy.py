@@ -9,6 +9,9 @@ import yaml
 
 TERMINAL_EVENT_TYPES = {"delegation.completed", "delegation.failed", "delegation.rejected"}
 CREATED_STATUSES = {"created", "pending_runtime_binding"}
+PROTECTION_OVERRIDE_EVENT_TYPE = "audit.protection.override"
+MAIN_CONTEXT_AGENT_IDS = {"codex_main", "MainContext"}
+MAIN_CONTEXT_ROLE = "main_context"
 TARGET_REQUIRED_EVENT_TYPES = {
     "runtime.agent.spawned",
     "runtime.agent.terminated",
@@ -29,6 +32,17 @@ def load_events(path: Path) -> list[dict]:
 def load_policy(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as handle:
         return yaml.safe_load(handle)
+
+
+def load_transcripts(channels_dir: Path | None) -> list[dict]:
+    if not channels_dir or not channels_dir.exists():
+        return []
+
+    transcripts: list[dict] = []
+    for transcript_path in sorted(channels_dir.glob("*.jsonl")):
+        with transcript_path.open("r", encoding="utf-8") as handle:
+            transcripts.extend(json.loads(line) for line in handle if line.strip())
+    return transcripts
 
 
 def roles_from_events(events: list[dict]) -> dict[str, str]:
@@ -88,6 +102,120 @@ def has_message(events: list[dict], message_type: str) -> bool:
     )
 
 
+def normalize_artifact_ref(value: object) -> str:
+    text = str(value).strip().replace("\\", "/")
+    while text.startswith("./"):
+        text = text[2:]
+    return text
+
+
+def extract_artifact_refs_from_payload(payload: dict) -> list[str]:
+    refs: list[str] = []
+    for key in ("artifact_ref", "artifact_refs"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            refs.extend(normalize_artifact_ref(item) for item in value)
+        elif value:
+            refs.append(normalize_artifact_ref(value))
+    return [ref for ref in refs if ref]
+
+
+def protected_ref_kind(ref: str, policy: dict) -> str | None:
+    normalized = normalize_artifact_ref(ref)
+    lowered = normalized.lower()
+    protected_paths = policy.get("protected_paths", {})
+
+    for root in protected_paths.get("protected_skill_roots", []):
+        protected_root = normalize_artifact_ref(root).lower().rstrip("/") + "/"
+        if lowered == protected_root.rstrip("/") or lowered.startswith(protected_root):
+            return "skill"
+
+    for pattern in protected_paths.get("protected_audit_files", []):
+        protected_pattern = normalize_artifact_ref(pattern).lower()
+        if protected_pattern == "workflow_log.jsonl" and lowered.endswith("workflow_log.jsonl"):
+            return "audit_log"
+        if protected_pattern == "channels/*.jsonl":
+            parts = lowered.split("/")
+            if len(parts) >= 2 and parts[-2] == "channels" and parts[-1].endswith(".jsonl"):
+                return "audit_log"
+
+    return None
+
+
+def override_matches_ref(scope: str, ref: str, kind: str) -> bool:
+    normalized_scope = normalize_artifact_ref(scope).lower()
+    normalized_ref = normalize_artifact_ref(ref).lower()
+    if normalized_scope == kind:
+        return True
+    if normalized_scope == normalized_ref:
+        return True
+    if normalized_scope.endswith("/") and normalized_ref.startswith(normalized_scope):
+        return True
+    return False
+
+
+def protection_overrides(events: list[dict]) -> list[dict]:
+    return [event for event in events if event.get("event_type") == PROTECTION_OVERRIDE_EVENT_TYPE]
+
+
+def validate_protection_overrides(events: list[dict], roles: dict[str, str]) -> list[str]:
+    violations: list[str] = []
+    for event in protection_overrides(events):
+        payload = event.get("payload", {})
+        event_id = event.get("event_id") or PROTECTION_OVERRIDE_EVENT_TYPE
+        source_agent = event.get("source_agent_id")
+        source_role = roles.get(source_agent)
+        if source_agent not in MAIN_CONTEXT_AGENT_IDS and source_role != MAIN_CONTEXT_ROLE:
+            violations.append(f"[{event_id}] protection override must be emitted by MainContext")
+        if payload.get("authorized_by") != "developer":
+            violations.append(f"[{event_id}] protection override must be authorized_by developer")
+        if not payload.get("scope"):
+            violations.append(f"[{event_id}] protection override missing payload.scope")
+        if not payload.get("reason"):
+            violations.append(f"[{event_id}] protection override missing payload.reason")
+    return violations
+
+
+def has_matching_override(ref: str, kind: str, events: list[dict]) -> bool:
+    for event in protection_overrides(events):
+        payload = event.get("payload", {})
+        if (
+            payload.get("authorized_by") == "developer"
+            and payload.get("reason")
+            and override_matches_ref(payload.get("scope", ""), ref, kind)
+        ):
+            return True
+    return False
+
+
+def validate_protected_artifact_refs(events: list[dict], transcripts: list[dict], policy: dict) -> list[str]:
+    violations: list[str] = []
+
+    for event in events:
+        for ref in extract_artifact_refs_from_payload(event.get("payload", {})):
+            kind = protected_ref_kind(ref, policy)
+            if not kind or has_matching_override(ref, kind, events):
+                continue
+            delegation_id = event.get("delegation_id")
+            if kind == "skill":
+                violations.append(f"[{delegation_id}] protected skill path changed without developer override: {ref}")
+            else:
+                violations.append(f"[{delegation_id}] canonical audit log rewrite attempted without developer override: {ref}")
+
+    for transcript in transcripts:
+        for ref in extract_artifact_refs_from_payload(transcript):
+            kind = protected_ref_kind(ref, policy)
+            if not kind or has_matching_override(ref, kind, events):
+                continue
+            delegation_id = transcript.get("delegation_id")
+            if kind == "skill":
+                violations.append(f"[{delegation_id}] protected skill path changed without developer override: {ref}")
+            else:
+                violations.append(f"[{delegation_id}] canonical audit log rewrite attempted without developer override: {ref}")
+
+    return violations
+
+
 def child_delegations_for_requester(
     delegations: dict[str, dict],
     grouped: dict[str, list[dict]],
@@ -104,7 +232,7 @@ def child_delegations_for_requester(
     return matches
 
 
-def validate(events: list[dict], policy: dict) -> list[str]:
+def validate(events: list[dict], policy: dict, transcripts: list[dict] | None = None) -> list[str]:
     roles = roles_from_events(events)
     grouped_by_delegation = event_index(events, "delegation_id")
     delegations = {
@@ -113,8 +241,12 @@ def validate(events: list[dict], policy: dict) -> list[str]:
         if event["event_type"] == "delegation.created" and event.get("delegation_id")
     }
     violations: list[str] = []
+    transcripts = transcripts or []
 
     role_policy = policy.get("roles", {})
+
+    violations.extend(validate_protection_overrides(events, roles))
+    violations.extend(validate_protected_artifact_refs(events, transcripts, policy))
 
     for event in events:
         if event["event_type"] in TARGET_REQUIRED_EVENT_TYPES and not event.get("target_agent_id"):
@@ -275,10 +407,12 @@ def main() -> int:
     args = parser.parse_args()
 
     events = load_events(Path(args.log))
+    channels_dir = Path(args.log).parent / "channels"
+    transcripts = load_transcripts(channels_dir)
     policy = load_policy(Path(args.policy))
     roles = roles_from_events(events)
     delegations = [event for event in events if event["event_type"] == "delegation.created"]
-    violations = validate(events, policy)
+    violations = validate(events, policy, transcripts)
 
     print("=== WORKFLOW AUDIT POLICY CHECK ===")
     print(f"Total events: {len(events)}")

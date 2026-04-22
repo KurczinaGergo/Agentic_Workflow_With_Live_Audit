@@ -31,10 +31,14 @@ python <skill>/scripts/workflow-audit/init_workflow_audit.py --config workflow.c
 
 ## Audit Discipline
 
+- Treat `workflow_log.jsonl` and `channels/*.jsonl` as append-only source-of-truth evidence.
+- Treat audit visibility as observation only: do not reduce task count, merge distinct workstreams, skip safe parallelism, narrow testing, or simplify implementation choices to make the audit cleaner.
 - Append events live with `append_workflow_event.py`.
 - Append pair-channel transcript entries live with `append_channel_message.py`.
 - Use `delegation_id` as the primary trace key.
 - Do not reconstruct new workflow logs after the fact.
+- Do not edit prior audit events, prior channel messages, or the skill package during a normal agentic workflow.
+- If the developer explicitly instructs work on this skill or on canonical audit logs, `MainContext` must first emit `audit.protection.override` with `payload.authorized_by: "developer"`, a `payload.scope`, and a non-empty `payload.reason`.
 - Generate artifacts at the end:
 
 ```powershell
@@ -44,6 +48,14 @@ python <skill>/scripts/workflow-audit/generate_logical_mermaid.py --log <audit_r
 python <skill>/scripts/workflow-audit/generate_delegation_report.py --log <audit_root>/<workflow_name>/workflow_log.jsonl --out <audit_root>/<workflow_name>/delegation_report.txt
 python <skill>/scripts/workflow-audit/render_workflow_html.py --config workflow.config.yaml
 ```
+
+## Audit Source Of Truth
+
+- The audit ledger is evidence, not implementation material.
+- Agents must optimize for the real work: speed, precision, ownership boundaries, verification quality, and faithful reporting of the actual situation.
+- Failed audits must be fixed through implementation changes, follow-up tasks, or explicit developer-authorized audit maintenance.
+- Generated artifacts such as Mermaid diagrams, reports, and HTML viewers may be regenerated from the canonical JSONL ledger.
+- Rewriting `workflow_log.jsonl` or `channels/*.jsonl` without explicit developer authorization invalidates the workflow.
 
 ## References
 

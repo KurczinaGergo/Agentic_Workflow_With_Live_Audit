@@ -21,6 +21,10 @@ Called by `MainContext` on the Architect's request. `MainContext` creates a priv
 - Communicate only through the Architect<->Documenting private channel.
 - Do not create follow-up tasks directly.
 - Report recommended additional work back to the Architect.
+- Document the real workflow outcome; do not simplify scope, omit material caveats, or reshape documentation to make the audit cleaner.
+- Treat audit JSONL as append-only source-of-truth evidence.
+- Do not edit `skill/`, `workflow_log.jsonl`, or `channels/*.jsonl` as documentation work unless `MainContext` has logged a developer-authorized `audit.protection.override`.
+- Document audit outcomes from the canonical ledger; do not rewrite the ledger to match documentation.
 
 ## Outputs
 

@@ -24,6 +24,10 @@ Called by `MainContext` after the SW Technical Engineer requests unit-test valid
 - Do not take over integration-test responsibilities.
 - Do not silently skip testing or convert a blocker into `ACCEPT`.
 - If the same blocker occurs on three attempts, the engineer may report that repeated blocker to the Architect and skip further unit-test attempts for the task.
+- Choose the most relevant task-level verification for the actual work; do not narrow tests, hide blockers, or simplify results to make the audit cleaner.
+- Treat audit JSONL as append-only source-of-truth evidence.
+- Do not request or approve edits to `skill/`, `workflow_log.jsonl`, or `channels/*.jsonl` unless `MainContext` has logged a developer-authorized `audit.protection.override`.
+- If verification exposes an audit failure, report it as a finding instead of rewriting audit history.
 
 ## Outputs
 

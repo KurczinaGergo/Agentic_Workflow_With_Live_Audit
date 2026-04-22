@@ -47,3 +47,8 @@ rules:
 
   - id: every_delegation_must_finish
     final_status_must_be_one_of: [completed, failed, rejected]
+
+protected_paths:
+  protected_skill_roots: [skill/]
+  protected_audit_files: [workflow_log.jsonl, channels/*.jsonl]
+  allowed_without_override: append_only

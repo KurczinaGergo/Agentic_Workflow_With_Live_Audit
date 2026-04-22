@@ -7,6 +7,8 @@ Canonical workflow-audit contracts and generators for reusable agentic workflow 
 - These tools apply to new workflow runs only.
 - The canonical event stream is `<audit_root>/<workflow_name>/workflow_log.jsonl`.
 - Pair-channel transcripts are stored under `<audit_root>/<workflow_name>/channels/`.
+- Canonical audit JSONL is append-only source-of-truth evidence.
+- Generated Mermaid, report, and HTML files are derived artifacts that may be regenerated from the JSONL ledger.
 - Relative paths in `workflow.config.yaml` are resolved from the config file directory.
 
 ## Files
@@ -53,6 +55,8 @@ If an appended workflow event or channel message omits `timestamp`, the append h
 Reconstruction is not acceptable for new runs. `workflow_log.jsonl` and `channels/*.jsonl` are expected to be append-only live artifacts written during execution.
 
 Pre-bind `delegation.created` events are allowed only as complete logical records. Include `payload.requested_by_role`, `payload.target_role`, compatibility `payload.role` matching `target_role`, and `payload.status` set to `created` or `pending_runtime_binding`; the same `delegation_id` must later receive matching runtime-agent and channel bindings. Later runtime, binding, logical message, and terminal events must set `target_agent_id`.
+
+Do not rewrite prior `workflow_log.jsonl` or `channels/*.jsonl` records to fit an audit result. Failed audits must be fixed through implementation changes, follow-up tasks, or an explicit developer-authorized audit-maintenance task. Protected edits to `skill/` or canonical audit JSONL require a prior `audit.protection.override` event emitted by `MainContext` with `payload.authorized_by: "developer"`, `payload.scope`, and a non-empty `payload.reason`.
 
 ## Validation And Derived Artifacts
 

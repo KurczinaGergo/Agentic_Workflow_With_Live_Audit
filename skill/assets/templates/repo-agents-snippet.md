@@ -21,3 +21,6 @@ Copyable WorkTrace-style setup:
 - After task acceptance, write an acceptance/DoD record under `dod_root/<workflow_name>/`.
 - When all known tasks are complete, the Architect requests Integration Test through `MainContext`.
 - Keep `workflow_log.jsonl` and `channels/*.jsonl` updated live in `audit_root/<workflow_name>/`.
+- Treat `workflow_log.jsonl` and `channels/*.jsonl` as append-only source-of-truth evidence.
+- Do not edit prior audit records or `skill/` during a normal agentic workflow.
+- Protected skill or canonical audit edits require an explicit developer instruction and a prior `MainContext` `audit.protection.override` event.

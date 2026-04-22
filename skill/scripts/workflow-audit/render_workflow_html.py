@@ -375,7 +375,7 @@ def find_attention_items(
     transcripts: list[dict],
     policy_path: Path,
 ) -> tuple[list[dict], list[str]]:
-    violations = validate(events, load_policy(policy_path)) if policy_path.exists() else []
+    violations = validate(events, load_policy(policy_path), transcripts) if policy_path.exists() else []
     related_transcripts, transcript_pairs, _ = index_transcripts(transcripts)
     has_any_transcripts = bool(transcripts)
     items: list[dict] = [{"kind": "Policy", "severity": "danger", "summary": violation} for violation in violations]

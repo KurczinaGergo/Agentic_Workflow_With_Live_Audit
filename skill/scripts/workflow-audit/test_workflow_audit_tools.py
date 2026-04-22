@@ -48,6 +48,29 @@ def sample_events() -> list[dict]:
     return [json.loads(line) for line in SAMPLE.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def protection_override_event(source_agent_id: str = "codex_main", scope: str = "skill") -> dict:
+    return {
+        "event_id": f"evt_override_{scope}_{source_agent_id}",
+        "run_id": "run_demo_001",
+        "timestamp": "2026-04-10T15:00:30Z",
+        "event_type": "audit.protection.override",
+        "source_agent_id": source_agent_id,
+        "target_agent_id": None,
+        "runtime_parent_agent_id": "codex_main",
+        "logical_parent_agent_id": "codex_main",
+        "requested_by_agent_id": "codex_main",
+        "delegation_id": None,
+        "channel_id": None,
+        "workflow_step": None,
+        "message_type": None,
+        "payload": {
+            "authorized_by": "developer",
+            "scope": scope,
+            "reason": "Developer explicitly instructed this workflow to update protected audit assets.",
+        },
+    }
+
+
 def write_events(events: list[dict]) -> Path:
     return write_log([json.dumps(event) for event in events])
 
@@ -170,6 +193,70 @@ class WorkflowAuditToolsTests(unittest.TestCase):
         result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("runtime.agent.spawned requires target_agent_id", result.stdout)
+
+    def test_protected_skill_artifact_ref_fails_without_override(self) -> None:
+        events = sample_events()
+        events[5]["payload"]["artifact_refs"] = ["skill/SKILL.md"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("protected skill path changed without developer override", result.stdout)
+
+    def test_protected_audit_log_artifact_ref_fails_without_override(self) -> None:
+        events = sample_events()
+        events[5]["payload"]["artifact_refs"] = [".workflow/audit/FEATURE_V1/workflow_log.jsonl"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("canonical audit log rewrite attempted without developer override", result.stdout)
+
+    def test_protected_channel_artifact_ref_fails_without_override(self) -> None:
+        events = sample_events()
+        events[5]["payload"]["artifact_refs"] = [".workflow/audit/FEATURE_V1/channels/ch-worker.jsonl"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("canonical audit log rewrite attempted without developer override", result.stdout)
+
+    def test_protected_artifact_refs_pass_with_main_context_developer_override(self) -> None:
+        events = [protection_override_event(scope="skill"), *sample_events()]
+        events[6]["payload"]["artifact_refs"] = ["skill/SKILL.md"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_protection_override_from_non_main_context_fails(self) -> None:
+        events = [protection_override_event(source_agent_id="worker_1", scope="skill"), *sample_events()]
+        events[6]["payload"]["artifact_refs"] = ["skill/SKILL.md"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("protection override must be emitted by MainContext", result.stdout)
+
+    def test_derived_audit_artifact_ref_is_allowed_without_override(self) -> None:
+        events = sample_events()
+        events[5]["payload"]["artifact_refs"] = [".workflow/audit/FEATURE_V1/workflow_log.visualization.html"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_protected_transcript_artifact_ref_fails_without_override(self) -> None:
+        workflow_name = "_TEST_PROTECTED_TRANSCRIPT_REF"
+        transcript = (
+            '{"message_id": "msg_protected", "run_id": "run_demo_001", "timestamp": "2026-04-10T15:01:05Z", '
+            '"delegation_id": "del_impl_001", "channel_id": "ch_architect_worker_1", '
+            '"channel_kind": "architect_engineer", "workflow_label": "Task01", '
+            '"source_agent_id": "worker_1", "target_agent_id": "architect_1", "role": "worker_programmer", '
+            '"message_type": "implementation_result", "body": "Implementation completed.", '
+            '"artifact_refs": ["skill/SKILL.md"], "related_event_id": "evt_006"}'
+        )
+        audit_dir = write_audit_workflow(workflow_name, SAMPLE.read_text(encoding="utf-8").splitlines(), [transcript])
+        try:
+            result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(audit_dir / "workflow_log.jsonl"))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("protected skill path changed without developer override", result.stdout)
+        finally:
+            shutil.rmtree(audit_dir, ignore_errors=True)
 
     def test_architect_bootstrap_from_main_context_passes(self) -> None:
         events = [

@@ -39,6 +39,10 @@ Called by `MainContext` on behalf of the Architect with:
 - Return review, test, and architect handoffs as `logical.message.sent` plus terminal `delegation.*` events.
 - Record review and unit-test request handoffs as workflow-level `logical.message.sent` events in the same `delegation_id`, in addition to matching channel transcript entries.
 - Keep matching full-text channel transcript entries under the configured audit channel folder.
+- Do the real assigned work as precisely and efficiently as task scope allows; do not simplify implementation, verification, blocker reporting, or handoff evidence to make the audit cleaner.
+- Treat audit JSONL as append-only source-of-truth evidence.
+- Do not edit `skill/`, `workflow_log.jsonl`, or `channels/*.jsonl` during normal implementation work.
+- Reject or escalate any task that requires protected skill or canonical audit edits unless `MainContext` has logged a developer-authorized `audit.protection.override`.
 
 ## Outputs
 

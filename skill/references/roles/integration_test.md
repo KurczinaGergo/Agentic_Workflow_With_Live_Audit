@@ -22,6 +22,10 @@ Called by `MainContext` on the Architect's request. `MainContext` creates a priv
 - Report findings back to the Architect.
 - Group findings around cross-task behavior, integration risk, and regressions.
 - Return results through `logical.message.sent` and close the integration delegation with `delegation.completed`, `delegation.failed`, or `delegation.rejected`.
+- Verify the real integrated scope; do not reduce scenarios, hide cross-task risk, or simplify results to make the audit cleaner.
+- Treat audit JSONL as append-only source-of-truth evidence.
+- Do not request or approve edits to `skill/`, `workflow_log.jsonl`, or `channels/*.jsonl` unless `MainContext` has logged a developer-authorized `audit.protection.override`.
+- If integration evidence contradicts the audit, report the contradiction as a finding instead of rewriting audit history.
 
 ## Outputs
 

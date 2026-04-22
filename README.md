@@ -156,10 +156,19 @@ Important event families:
 - `runtime.*`: spawned agents and private channels
 - `binding.*`: links between delegations, runtime agents, and channels
 - `logical.message.sent`: meaningful agent-to-agent communication
+- `audit.protection.override`: developer-authorized protected skill or canonical audit maintenance
 
 `delegation_id` is the primary trace key across events, channels, reports, and acceptance records.
 
 Pre-bind `delegation.created` events are valid logical records, not placeholders. They may use `target_agent_id: null` only when `payload.requested_by_role`, `payload.target_role`, compatibility `payload.role`, and a created/pending status are present, and a later runtime binding resolves the same `delegation_id`. Later runtime, binding, logical message, and terminal events must set `target_agent_id`.
+
+## Audit Source Of Truth
+
+`workflow_log.jsonl` and `channels/*.jsonl` are append-only source-of-truth evidence. Workflow agents must not rewrite prior audit records or edit the `skill/` package during normal implementation work.
+
+Generated artifacts such as Mermaid diagrams, delegation reports, and `workflow_log.visualization.html` are derived from the canonical JSONL ledger and may be regenerated.
+
+Protected skill or canonical audit edits require explicit developer instruction and a prior `MainContext` `audit.protection.override` event with `payload.authorized_by: "developer"`, `payload.scope`, and a non-empty `payload.reason`.
 
 ## Generate Audit Artifacts
 
@@ -208,6 +217,8 @@ python -m unittest discover -s skill\scripts\workflow-audit -p "test_*.py"
 
 - Start audit logging before the first workflow spawn.
 - Do not reconstruct new workflow logs after the run.
+- Do not rewrite `workflow_log.jsonl` or `channels/*.jsonl` to fit an audit result.
+- Do not edit `skill/` from a normal agentic workflow task.
 - Implement from task files, not informal prompt text.
 - Keep role-specific communication in private pair channels.
 - Do not let non-main agents spawn other agents unless a role file explicitly allows it.
