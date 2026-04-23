@@ -7,6 +7,7 @@ This document defines the reusable runtime communication and logical audit contr
 - This is a documentation and audit contract, not a runtime ACL implementation.
 - The main Codex session acts as `MainContext`, with logical role `main_context`.
 - `MainContext` is the only entity allowed to spawn agents, create private channels, close private channels, and observe all workflow traffic.
+- Completing, failing, or rejecting a delegation closes the logical work contract only. Ephemeral spawned agents remain live until `MainContext` emits a matching `runtime.agent.terminated` event; persistent coordinators such as Architect stay alive while more workflow work may be assigned to them.
 - The default workflow roles are Architect, SW Technical Engineer, Code Review, Unit Tester, Integration Test, and Documenting.
 - New audit artifacts live under the configured `audit_root/<workflow_name>/`.
 - New workflow runs use `workflow_log.jsonl` as the canonical event stream.
@@ -160,6 +161,8 @@ Each line in `channels/<channel_id>.jsonl` uses this envelope:
 - A pre-bind `delegation.created` may use `target_agent_id: null` only when it later receives a matching `binding.delegation_runtime_agent`.
 - All later runtime, binding, logical message, and terminal events for that delegation must set `target_agent_id`; channel creation and channel binding events target the bound runtime agent.
 - Each `delegation.created` must have `runtime.agent.spawned`, `binding.delegation_runtime_agent`, `runtime.channel.created`, and `binding.delegation_channel`.
+- Each terminal `delegation.completed`, `delegation.failed`, or `delegation.rejected` must be followed by `runtime.channel.closed` for the bound channel and the same `delegation_id`.
+- Each terminal `delegation.completed`, `delegation.failed`, or `delegation.rejected` for an ephemeral role must also be followed by `runtime.agent.terminated` for the bound runtime agent and the same `delegation_id`.
 - No valid logical message may exist without its parent delegation.
 - Architect may delegate only to `worker_programmer`, `integration_test_agent`, and `documenting_agent`.
 - SW Technical Engineer may delegate only to `code_reviewer` and `unit_test_agent`.
@@ -178,9 +181,11 @@ Each line in `channels/<channel_id>.jsonl` uses this envelope:
 6. The engineer implements the task and emits `implementation_result`.
 7. The engineer requests Code Review, then Unit Tester, through direct pair channels.
 8. The engineer returns to the Architect only after accepted review and accepted unit testing, or after the configured repeated-blocker path.
-9. The engineer writes the acceptance/DoD record under `dod_root/<workflow_name>/`.
-10. The Architect requests Integration Test after all known tasks are accepted.
-11. The Architect requests Documenting if architecture or decision docs need updates.
+9. `MainContext` emits `runtime.agent.terminated` and `runtime.channel.closed` after each ephemeral reviewer, tester, engineer, integration, or documentation delegation reaches its terminal outcome.
+10. The engineer writes the acceptance/DoD record under `dod_root/<workflow_name>/`.
+11. The Architect requests Integration Test after all known tasks are accepted.
+12. The Architect requests Documenting if architecture or decision docs need updates.
+13. `MainContext` may terminate Architect and close the MainContext<->Architect channel only at final workflow shutdown, when no more task, integration, documentation, or closure work is expected.
 
 ## Derived Artifacts
 

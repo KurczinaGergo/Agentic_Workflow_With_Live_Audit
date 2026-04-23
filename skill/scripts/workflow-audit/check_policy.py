@@ -12,6 +12,13 @@ CREATED_STATUSES = {"created", "pending_runtime_binding"}
 PROTECTION_OVERRIDE_EVENT_TYPE = "audit.protection.override"
 MAIN_CONTEXT_AGENT_IDS = {"codex_main", "MainContext"}
 MAIN_CONTEXT_ROLE = "main_context"
+REQUIRED_DELEGATION_EVENT_TYPES = {
+    "delegation.created",
+    "runtime.agent.spawned",
+    "binding.delegation_runtime_agent",
+    "runtime.channel.created",
+    "binding.delegation_channel",
+}
 TARGET_REQUIRED_EVENT_TYPES = {
     "runtime.agent.spawned",
     "runtime.agent.terminated",
@@ -88,11 +95,86 @@ def runtime_binding_for_delegation(events: list[dict]) -> dict | None:
     return None
 
 
+def created_event_for_delegation(events: list[dict]) -> dict | None:
+    for event in events:
+        if event["event_type"] == "delegation.created":
+            return event
+    return None
+
+
+def terminal_events_for_delegation(events: list[dict]) -> list[tuple[int, dict]]:
+    return [
+        (index, event)
+        for index, event in enumerate(events)
+        if event["event_type"] in TERMINAL_EVENT_TYPES
+    ]
+
+
 def terminal_status(events: list[dict]) -> str | None:
     terminal_events = [event for event in events if event["event_type"] in TERMINAL_EVENT_TYPES]
     if not terminal_events:
         return None
     return terminal_events[-1].get("payload", {}).get("status")
+
+
+def terminal_event_index(events: list[dict]) -> int | None:
+    terminal_indexes = [
+        index
+        for index, event in enumerate(events)
+        if event["event_type"] in TERMINAL_EVENT_TYPES
+    ]
+    if not terminal_indexes:
+        return None
+    return terminal_indexes[-1]
+
+
+def has_runtime_termination_after(
+    events: list[dict],
+    runtime_agent_id: str,
+    terminal_index: int,
+) -> bool:
+    return any(
+        index > terminal_index
+        and event["event_type"] == "runtime.agent.terminated"
+        and event.get("target_agent_id") == runtime_agent_id
+        for index, event in enumerate(events)
+    )
+
+
+def has_channel_close_after(events: list[dict], channel_id: str, terminal_index: int) -> bool:
+    return any(
+        index > terminal_index
+        and event["event_type"] == "runtime.channel.closed"
+        and event.get("channel_id") == channel_id
+        for index, event in enumerate(events)
+    )
+
+
+def role_requires_runtime_termination(role_policy: dict, role: str | None) -> bool:
+    if not role:
+        return True
+    return role_policy.get(role, {}).get("lifecycle", "ephemeral") == "ephemeral"
+
+
+def close_event_types(policy: dict) -> set[str]:
+    return set(policy.get("workflow_lifecycle", {}).get("workflow_close_event_types", []))
+
+
+def roles_requiring_termination_on_close(policy: dict) -> set[str]:
+    return set(policy.get("workflow_lifecycle", {}).get("roles_requiring_termination_on_close", []))
+
+
+def has_workflow_close_event(events: list[dict], policy: dict) -> bool:
+    close_types = close_event_types(policy)
+    return bool(close_types) and any(event.get("event_type") in close_types for event in events)
+
+
+def has_runtime_termination_for_agent(events: list[dict], agent_id: str) -> bool:
+    return any(
+        event.get("event_type") == "runtime.agent.terminated"
+        and event.get("target_agent_id") == agent_id
+        for event in events
+    )
 
 
 def has_message(events: list[dict], message_type: str) -> bool:
@@ -292,6 +374,35 @@ def validate(events: list[dict], policy: dict, transcripts: list[dict] | None = 
                     f"[{delegation_id}] runtime binding role mismatch: {target_role} -> {bound_role}"
                 )
 
+    for delegation_id, delegation_events in grouped_by_delegation.items():
+        created_event = created_event_for_delegation(delegation_events)
+        terminal_events = terminal_events_for_delegation(delegation_events)
+        if created_event is None:
+            if terminal_events:
+                violations.append(f"[{delegation_id}] terminal delegation event without delegation.created")
+            continue
+
+        binding = runtime_binding_for_delegation(delegation_events)
+        runtime_agent_id = binding.get("target_agent_id") if binding else None
+        if runtime_agent_id:
+            for _, terminal_event in terminal_events:
+                if terminal_event.get("source_agent_id") != runtime_agent_id:
+                    violations.append(
+                        f"[{delegation_id}] terminal event source_agent_id "
+                        f"'{terminal_event.get('source_agent_id')}' does not match bound runtime agent "
+                        f"'{runtime_agent_id}'"
+                    )
+
+        terminal_index = terminal_event_index(delegation_events)
+        if terminal_index is not None:
+            for index, event in enumerate(delegation_events):
+                if index <= terminal_index:
+                    continue
+                if event["event_type"] in REQUIRED_DELEGATION_EVENT_TYPES - {"delegation.created"}:
+                    violations.append(
+                        f"[{delegation_id}] {event['event_type']} appears after terminal delegation event"
+                    )
+
     for rule in policy.get("rules", []):
         for edge in rule.get("forbid_delegation", []):
             source_role, target_role = edge.split("->", 1)
@@ -308,8 +419,7 @@ def validate(events: list[dict], policy: dict, transcripts: list[dict] | None = 
         if not required_events:
             continue
 
-        for delegation_id in delegations:
-            delegation_events = grouped_by_delegation[delegation_id]
+        for delegation_id, delegation_events in grouped_by_delegation.items():
             present = {event["event_type"] for event in delegation_events}
             for required_event in required_events:
                 if required_event not in present:
@@ -338,13 +448,49 @@ def validate(events: list[dict], policy: dict, transcripts: list[dict] | None = 
         if "final_status_must_be_one_of" in rule:
             allowed_final_statuses.update(rule["final_status_must_be_one_of"])
 
-    for delegation_id in delegations:
-        delegation_events = grouped_by_delegation[delegation_id]
+    for delegation_id, delegation_events in grouped_by_delegation.items():
+        if delegation_id not in delegations:
+            continue
         status = terminal_status(delegation_events)
+        terminal_index = terminal_event_index(delegation_events)
         if status is None:
             violations.append(f"[{delegation_id}] no terminal delegation event found")
         elif allowed_final_statuses and status not in allowed_final_statuses:
             violations.append(f"[{delegation_id}] invalid final status: {status}")
+        elif terminal_index is not None:
+            binding = runtime_binding_for_delegation(delegation_events)
+            runtime_agent_id = binding.get("target_agent_id") if binding else None
+            runtime_role = binding.get("payload", {}).get("role") if binding else None
+            channel_id = next(
+                (
+                    event.get("channel_id")
+                    for event in delegation_events
+                    if event["event_type"] == "binding.delegation_channel" and event.get("channel_id")
+                ),
+                None,
+            )
+            if (
+                runtime_agent_id
+                and role_requires_runtime_termination(role_policy, runtime_role)
+                and not has_runtime_termination_after(delegation_events, runtime_agent_id, terminal_index)
+            ):
+                violations.append(
+                    f"[{delegation_id}] missing runtime.agent.terminated for bound agent "
+                    f"'{runtime_agent_id}' after terminal delegation event"
+                )
+            if channel_id and not has_channel_close_after(delegation_events, channel_id, terminal_index):
+                violations.append(
+                    f"[{delegation_id}] missing runtime.channel.closed for bound channel "
+                    f"'{channel_id}' after terminal delegation event"
+                )
+
+    if has_workflow_close_event(events, policy):
+        close_roles = roles_requiring_termination_on_close(policy)
+        for agent_id, role in roles.items():
+            if role in close_roles and not has_runtime_termination_for_agent(events, agent_id):
+                violations.append(
+                    f"[{agent_id}] workflow close requires runtime.agent.terminated for {role}"
+                )
 
     for rule in policy.get("rules", []):
         required_child_steps = rule.get("requires_child_steps")
@@ -411,7 +557,7 @@ def main() -> int:
     transcripts = load_transcripts(channels_dir)
     policy = load_policy(Path(args.policy))
     roles = roles_from_events(events)
-    delegations = [event for event in events if event["event_type"] == "delegation.created"]
+    delegations = event_index(events, "delegation_id")
     violations = validate(events, policy, transcripts)
 
     print("=== WORKFLOW AUDIT POLICY CHECK ===")

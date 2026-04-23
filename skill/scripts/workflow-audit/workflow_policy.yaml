@@ -1,31 +1,42 @@
 roles:
   main_context:
+    lifecycle: run_persistent
     can_delegate_to: [architect]
     allowed_message_types: [task_request, clarification]
 
   architect:
+    lifecycle: workflow_persistent
     can_delegate_to: [worker_programmer, integration_test_agent, documenting_agent]
     allowed_message_types: [task_request, verdict, clarification]
 
   worker_programmer:
+    lifecycle: ephemeral
     can_delegate_to: [code_reviewer, unit_test_agent]
     allowed_message_types: [implementation_result, review_request, test_request, clarification, review_result, test_result, blocker_report]
 
   code_reviewer:
+    lifecycle: ephemeral
     can_delegate_to: []
     allowed_message_types: [review_result, clarification]
 
   unit_test_agent:
+    lifecycle: ephemeral
     can_delegate_to: []
     allowed_message_types: [test_result, clarification]
 
   integration_test_agent:
+    lifecycle: ephemeral
     can_delegate_to: []
     allowed_message_types: [test_result, clarification]
 
   documenting_agent:
+    lifecycle: ephemeral
     can_delegate_to: []
     allowed_message_types: [documentation_update, clarification]
+
+workflow_lifecycle:
+  workflow_close_event_types: [workflow.closed, workflow.completed]
+  roles_requiring_termination_on_close: [architect]
 
 rules:
   - id: no_worker_to_worker_delegation

@@ -75,6 +75,167 @@ def write_events(events: list[dict]) -> Path:
     return write_log([json.dumps(event) for event in events])
 
 
+def architect_lifecycle_events(include_termination: bool = False, include_close: bool = False) -> list[dict]:
+    events = [
+        {
+            "event_id": "evt_arch_created",
+            "run_id": "run_arch",
+            "timestamp": "2026-04-17T10:00:00Z",
+            "event_type": "delegation.created",
+            "source_agent_id": "MainContext",
+            "target_agent_id": "architect_1",
+            "runtime_parent_agent_id": "MainContext",
+            "logical_parent_agent_id": "MainContext",
+            "requested_by_agent_id": "MainContext",
+            "delegation_id": "del_arch",
+            "channel_id": None,
+            "workflow_step": "architecture",
+            "message_type": "task_request",
+            "payload": {
+                "requested_by_role": "main_context",
+                "target_role": "architect",
+                "role": "architect",
+                "status": "created",
+            },
+        },
+        {
+            "event_id": "evt_arch_spawned",
+            "run_id": "run_arch",
+            "timestamp": "2026-04-17T10:00:01Z",
+            "event_type": "runtime.agent.spawned",
+            "source_agent_id": "MainContext",
+            "target_agent_id": "architect_1",
+            "runtime_parent_agent_id": "MainContext",
+            "logical_parent_agent_id": "MainContext",
+            "requested_by_agent_id": "MainContext",
+            "delegation_id": "del_arch",
+            "channel_id": None,
+            "workflow_step": "architecture",
+            "message_type": None,
+            "payload": {"role": "architect"},
+        },
+        {
+            "event_id": "evt_arch_bound",
+            "run_id": "run_arch",
+            "timestamp": "2026-04-17T10:00:02Z",
+            "event_type": "binding.delegation_runtime_agent",
+            "source_agent_id": "MainContext",
+            "target_agent_id": "architect_1",
+            "runtime_parent_agent_id": "MainContext",
+            "logical_parent_agent_id": "MainContext",
+            "requested_by_agent_id": "MainContext",
+            "delegation_id": "del_arch",
+            "channel_id": None,
+            "workflow_step": "architecture",
+            "message_type": None,
+            "payload": {"role": "architect"},
+        },
+        {
+            "event_id": "evt_arch_channel",
+            "run_id": "run_arch",
+            "timestamp": "2026-04-17T10:00:03Z",
+            "event_type": "runtime.channel.created",
+            "source_agent_id": "MainContext",
+            "target_agent_id": "architect_1",
+            "runtime_parent_agent_id": "MainContext",
+            "logical_parent_agent_id": "MainContext",
+            "requested_by_agent_id": "MainContext",
+            "delegation_id": "del_arch",
+            "channel_id": "ch_main_arch",
+            "workflow_step": "architecture",
+            "message_type": None,
+            "payload": {"owners": ["MainContext", "architect_1"]},
+        },
+        {
+            "event_id": "evt_arch_channel_bound",
+            "run_id": "run_arch",
+            "timestamp": "2026-04-17T10:00:04Z",
+            "event_type": "binding.delegation_channel",
+            "source_agent_id": "MainContext",
+            "target_agent_id": "architect_1",
+            "runtime_parent_agent_id": "MainContext",
+            "logical_parent_agent_id": "MainContext",
+            "requested_by_agent_id": "MainContext",
+            "delegation_id": "del_arch",
+            "channel_id": "ch_main_arch",
+            "workflow_step": "architecture",
+            "message_type": None,
+            "payload": {},
+        },
+        {
+            "event_id": "evt_arch_completed",
+            "run_id": "run_arch",
+            "timestamp": "2026-04-17T10:00:05Z",
+            "event_type": "delegation.completed",
+            "source_agent_id": "architect_1",
+            "target_agent_id": "MainContext",
+            "runtime_parent_agent_id": "MainContext",
+            "logical_parent_agent_id": "MainContext",
+            "requested_by_agent_id": "MainContext",
+            "delegation_id": "del_arch",
+            "channel_id": "ch_main_arch",
+            "workflow_step": "architecture",
+            "message_type": "verdict",
+            "payload": {"status": "completed"},
+        },
+        {
+            "event_id": "evt_arch_channel_closed",
+            "run_id": "run_arch",
+            "timestamp": "2026-04-17T10:00:05.500000Z",
+            "event_type": "runtime.channel.closed",
+            "source_agent_id": "MainContext",
+            "target_agent_id": "architect_1",
+            "runtime_parent_agent_id": "MainContext",
+            "logical_parent_agent_id": "MainContext",
+            "requested_by_agent_id": "MainContext",
+            "delegation_id": "del_arch",
+            "channel_id": "ch_main_arch",
+            "workflow_step": "architecture",
+            "message_type": None,
+            "payload": {"ended_reason": "architecture delegation completed"},
+        },
+    ]
+    if include_termination:
+        events.append(
+            {
+                "event_id": "evt_arch_terminated",
+                "run_id": "run_arch",
+                "timestamp": "2026-04-17T10:00:06Z",
+                "event_type": "runtime.agent.terminated",
+                "source_agent_id": "MainContext",
+                "target_agent_id": "architect_1",
+                "runtime_parent_agent_id": "MainContext",
+                "logical_parent_agent_id": "MainContext",
+                "requested_by_agent_id": "MainContext",
+                "delegation_id": "del_arch",
+                "channel_id": None,
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {"ended_reason": "workflow shutdown"},
+            }
+        )
+    if include_close:
+        events.append(
+            {
+                "event_id": "evt_workflow_closed",
+                "run_id": "run_arch",
+                "timestamp": "2026-04-17T10:00:07Z",
+                "event_type": "workflow.closed",
+                "source_agent_id": "MainContext",
+                "target_agent_id": None,
+                "runtime_parent_agent_id": "MainContext",
+                "logical_parent_agent_id": "MainContext",
+                "requested_by_agent_id": "MainContext",
+                "delegation_id": None,
+                "channel_id": None,
+                "workflow_step": "workflow_close",
+                "message_type": None,
+                "payload": {"status": "closed"},
+            }
+        )
+    return events
+
+
 def write_audit_workflow(name: str, lines: list[str], transcript_lines: list[str] | None = None) -> Path:
     audit_dir = AUDIT_ROOT / name
     if audit_dir.exists():
@@ -362,6 +523,22 @@ class WorkflowAuditToolsTests(unittest.TestCase):
                 "message_type": "verdict",
                 "payload": {"status": "completed"},
             },
+            {
+                "event_id": "evt_boot_007",
+                "run_id": "run_bootstrap",
+                "timestamp": "2026-04-21T10:00:06Z",
+                "event_type": "runtime.channel.closed",
+                "source_agent_id": "codex_main",
+                "target_agent_id": "architect_1",
+                "runtime_parent_agent_id": "codex_main",
+                "logical_parent_agent_id": "codex_main",
+                "requested_by_agent_id": "codex_main",
+                "delegation_id": "del_architect_001",
+                "channel_id": "ch_main_architect_1",
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {"ended_reason": "architecture delegation completed"},
+            },
         ]
         log_path = write_events(events)
         result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
@@ -374,6 +551,101 @@ class WorkflowAuditToolsTests(unittest.TestCase):
         result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("no terminal delegation event found", result.stdout)
+
+    def test_missing_runtime_agent_termination_fails(self) -> None:
+        events = [event for event in sample_events() if event["event_id"] != "evt_026"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing runtime.agent.terminated for bound agent 'worker_1'", result.stdout)
+
+    def test_runtime_agent_termination_must_target_bound_agent(self) -> None:
+        events = sample_events()
+        termination = next(event for event in events if event["event_id"] == "evt_026")
+        termination["target_agent_id"] = "reviewer_1"
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing runtime.agent.terminated for bound agent 'worker_1'", result.stdout)
+
+    def test_runtime_agent_termination_must_follow_terminal_event(self) -> None:
+        events = sample_events()
+        termination_index = next(index for index, event in enumerate(events) if event["event_id"] == "evt_026")
+        termination = events.pop(termination_index)
+        terminal_index = next(index for index, event in enumerate(events) if event["event_id"] == "evt_023")
+        events.insert(terminal_index, termination)
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing runtime.agent.terminated for bound agent 'worker_1'", result.stdout)
+
+    def test_missing_channel_close_fails(self) -> None:
+        events = [event for event in sample_events() if event["event_id"] != "evt_029"]
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing runtime.channel.closed for bound channel 'ch_architect_worker_1'", result.stdout)
+
+    def test_terminal_only_delegation_id_fails(self) -> None:
+        events = sample_events()
+        events.append(
+            {
+                "event_id": "evt_terminal_only",
+                "run_id": "run_demo_001",
+                "timestamp": "2026-04-10T15:03:00Z",
+                "event_type": "delegation.completed",
+                "source_agent_id": "reviewer_orphan",
+                "target_agent_id": "worker_1",
+                "runtime_parent_agent_id": "codex_main",
+                "logical_parent_agent_id": "worker_1",
+                "requested_by_agent_id": "worker_1",
+                "delegation_id": "del_orphan_review",
+                "channel_id": "ch_orphan_review",
+                "workflow_step": "review",
+                "message_type": "review_result",
+                "payload": {"status": "completed", "role": "code_reviewer"},
+            }
+        )
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("terminal delegation event without delegation.created", result.stdout)
+
+    def test_terminal_source_must_match_bound_runtime_agent(self) -> None:
+        events = sample_events()
+        terminal = next(event for event in events if event["event_id"] == "evt_014")
+        terminal["source_agent_id"] = "wrong_reviewer"
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not match bound runtime agent 'reviewer_1'", result.stdout)
+
+    def test_lifecycle_event_after_terminal_fails(self) -> None:
+        events = sample_events()
+        spawn_index = next(index for index, event in enumerate(events) if event["event_id"] == "evt_008")
+        spawned = events.pop(spawn_index)
+        terminal_index = next(index for index, event in enumerate(events) if event["event_id"] == "evt_014")
+        events.insert(terminal_index + 1, spawned)
+        log_path = write_events(events)
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime.agent.spawned appears after terminal delegation event", result.stdout)
+
+    def test_architect_may_remain_active_after_planning_completion(self) -> None:
+        log_path = write_events(architect_lifecycle_events())
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_workflow_close_requires_architect_termination(self) -> None:
+        log_path = write_events(architect_lifecycle_events(include_close=True))
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("workflow close requires runtime.agent.terminated for architect", result.stdout)
+
+    def test_architect_termination_satisfies_workflow_close(self) -> None:
+        log_path = write_events(architect_lifecycle_events(include_termination=True, include_close=True))
+        result = run_python(str(CHECK_POLICY), "--policy", str(POLICY), "--log", str(log_path))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_generators_create_outputs(self) -> None:
         with tempfile.TemporaryDirectory(prefix="workflow-audit-out-") as temp_dir:
@@ -698,6 +970,19 @@ class WorkflowAuditToolsTests(unittest.TestCase):
                 "message_type": None,
                 "payload": {"ended_reason": "work complete"},
             },
+            {
+                "event_id": "evt_9",
+                "run_id": "run_live",
+                "timestamp": "2026-04-17T10:00:09Z",
+                "event_type": "runtime.channel.closed",
+                "source_agent_id": "MainContext",
+                "target_agent_id": "worker_1",
+                "delegation_id": "del_1",
+                "channel_id": "ch_1",
+                "workflow_step": "implementation",
+                "message_type": None,
+                "payload": {"ended_reason": "work complete"},
+            },
         ]
         transcripts = [
             {
@@ -712,18 +997,159 @@ class WorkflowAuditToolsTests(unittest.TestCase):
             }
         ]
 
+        active_graph = derive_graph_state(events[:-2], transcripts)
+        active_worker = next(agent for agent in active_graph["agents"] if agent["id"] == "worker_1")
+        self.assertEqual(active_worker["status"], "active")
+        self.assertTrue(
+            any(
+                item["kind"] == "lifecycle"
+                and "worker_1 has no runtime.agent.terminated event" in item["summary"]
+                for item in active_graph["attention"]
+            )
+        )
+
         graph = derive_graph_state(events, transcripts)
         worker = next(agent for agent in graph["agents"] if agent["id"] == "worker_1")
         delegation = next(item for item in graph["delegations"] if item["id"] == "del_1")
         channel = next(item for item in graph["channels"] if item["id"] == "ch_1")
 
         self.assertEqual(worker["status"], "terminated")
+        self.assertFalse(any(item["kind"] == "lifecycle" for item in graph["attention"]))
         self.assertEqual(delegation["status"], "completed")
         self.assertEqual(delegation["runtime_agent_id"], "worker_1")
         self.assertEqual(delegation["channel_id"], "ch_1")
         self.assertEqual(channel["owners"], ["architect_1", "worker_1"])
+        self.assertEqual(channel["status"], "closed")
         self.assertTrue(any(message["message_type"] == "implementation_result" for message in graph["messages"]))
         self.assertEqual(sorted_timeline_items(events, transcripts)[0]["entry"]["event_id"], "evt_1")
+
+    def test_live_model_keeps_persistent_architect_active_without_warning(self) -> None:
+        events = [
+            {
+                "event_id": "evt_arch_0",
+                "run_id": "run_live",
+                "timestamp": "2026-04-17T10:00:00Z",
+                "event_type": "delegation.created",
+                "source_agent_id": "MainContext",
+                "target_agent_id": "architect_1",
+                "delegation_id": "del_arch",
+                "channel_id": None,
+                "workflow_step": "architecture",
+                "message_type": "task_request",
+                "payload": {
+                    "requested_by_role": "main_context",
+                    "target_role": "architect",
+                    "role": "architect",
+                    "status": "created",
+                },
+            },
+            {
+                "event_id": "evt_arch_1",
+                "run_id": "run_live",
+                "timestamp": "2026-04-17T10:00:01Z",
+                "event_type": "runtime.agent.spawned",
+                "source_agent_id": "MainContext",
+                "target_agent_id": "architect_1",
+                "delegation_id": "del_arch",
+                "channel_id": None,
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {"role": "architect"},
+            },
+            {
+                "event_id": "evt_arch_2",
+                "run_id": "run_live",
+                "timestamp": "2026-04-17T10:00:02Z",
+                "event_type": "binding.delegation_runtime_agent",
+                "source_agent_id": "MainContext",
+                "target_agent_id": "architect_1",
+                "delegation_id": "del_arch",
+                "channel_id": None,
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {"role": "architect"},
+            },
+            {
+                "event_id": "evt_arch_2b",
+                "run_id": "run_live",
+                "timestamp": "2026-04-17T10:00:02.500000Z",
+                "event_type": "runtime.channel.created",
+                "source_agent_id": "MainContext",
+                "target_agent_id": "architect_1",
+                "delegation_id": "del_arch",
+                "channel_id": "ch_main_arch",
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {"owners": ["MainContext", "architect_1"]},
+            },
+            {
+                "event_id": "evt_arch_2c",
+                "run_id": "run_live",
+                "timestamp": "2026-04-17T10:00:02.750000Z",
+                "event_type": "binding.delegation_channel",
+                "source_agent_id": "MainContext",
+                "target_agent_id": "architect_1",
+                "delegation_id": "del_arch",
+                "channel_id": "ch_main_arch",
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {},
+            },
+            {
+                "event_id": "evt_arch_3",
+                "run_id": "run_live",
+                "timestamp": "2026-04-17T10:00:03Z",
+                "event_type": "delegation.completed",
+                "source_agent_id": "architect_1",
+                "target_agent_id": "MainContext",
+                "delegation_id": "del_arch",
+                "channel_id": "ch_main_arch",
+                "workflow_step": "architecture",
+                "message_type": "verdict",
+                "payload": {"status": "completed"},
+            },
+            {
+                "event_id": "evt_arch_3b",
+                "run_id": "run_live",
+                "timestamp": "2026-04-17T10:00:03.500000Z",
+                "event_type": "runtime.channel.closed",
+                "source_agent_id": "MainContext",
+                "target_agent_id": "architect_1",
+                "delegation_id": "del_arch",
+                "channel_id": "ch_main_arch",
+                "workflow_step": "architecture",
+                "message_type": None,
+                "payload": {"ended_reason": "architecture delegation completed"},
+            },
+        ]
+
+        graph = derive_graph_state(events, [])
+        architect = next(agent for agent in graph["agents"] if agent["id"] == "architect_1")
+
+        self.assertEqual(architect["status"], "active")
+        self.assertFalse(any(item["kind"] == "lifecycle" for item in graph["attention"]))
+
+        terminated_graph = derive_graph_state(
+            [
+                *events,
+                {
+                    "event_id": "evt_arch_4",
+                    "run_id": "run_live",
+                    "timestamp": "2026-04-17T10:00:04Z",
+                    "event_type": "runtime.agent.terminated",
+                    "source_agent_id": "MainContext",
+                    "target_agent_id": "architect_1",
+                    "delegation_id": "del_arch",
+                    "channel_id": None,
+                    "workflow_step": "architecture",
+                    "message_type": None,
+                    "payload": {"ended_reason": "workflow shutdown"},
+                },
+            ],
+            [],
+        )
+        terminated_architect = next(agent for agent in terminated_graph["agents"] if agent["id"] == "architect_1")
+        self.assertEqual(terminated_architect["status"], "terminated")
 
     def test_live_server_snapshot_returns_graph_and_replay_metadata(self) -> None:
         workflow_name = "_TEST_LIVE_SERVER"

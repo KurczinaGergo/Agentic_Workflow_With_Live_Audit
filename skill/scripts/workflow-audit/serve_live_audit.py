@@ -105,6 +105,8 @@ def live_view_html(workflow_name: str) -> str:
     .agent.terminated {{ border-color: var(--red); background: #fef2f2; }}
     .edge.completed {{ border-color: var(--green); background: #ecfdf5; }}
     .edge.failed, .edge.rejected {{ border-color: var(--red); background: #fef2f2; }}
+    .edge.danger {{ border-color: var(--red); background: #fef2f2; }}
+    .edge.warning {{ border-color: var(--amber); background: #fffbeb; }}
     .edge.open, .edge.created {{ border-color: var(--amber); background: #fffbeb; }}
     .message {{ border-color: var(--blue); background: #eff6ff; }}
     .meta {{ color: var(--muted); font-size: 0.82rem; overflow-wrap: anywhere; }}
@@ -159,6 +161,8 @@ def live_view_html(workflow_name: str) -> str:
       <section>
         <h2>Audit Details</h2>
         <div>
+          <h3>Attention</h3>
+          <div class="edges" id="attention"></div>
           <h3>Agents</h3>
           <div class="agents" id="agents"></div>
           <h3>Contracts And Channels</h3>
@@ -182,6 +186,7 @@ def live_view_html(workflow_name: str) -> str:
 
     const stats = document.querySelector("#stats");
     const nodeGraphEl = document.querySelector("#nodeGraph");
+    const attentionEl = document.querySelector("#attention");
     const agentsEl = document.querySelector("#agents");
     const edgesEl = document.querySelector("#edges");
     const messagesEl = document.querySelector("#messages");
@@ -212,13 +217,35 @@ def live_view_html(workflow_name: str) -> str:
     function derive(items) {{
       const events = items.filter((item) => item.kind === "event").map((item) => item.entry);
       const transcripts = items.filter((item) => item.kind === "transcript").map((item) => item.entry);
+      const workflowPersistentRoles = new Set(["architect"]);
+      const runPersistentRoles = new Set(["main_context"]);
+      const requiredDelegationEventTypes = new Set([
+        "delegation.created",
+        "runtime.agent.spawned",
+        "binding.delegation_runtime_agent",
+        "runtime.channel.created",
+        "binding.delegation_channel"
+      ]);
+      const workflowCloseEventTypes = new Set(["workflow.closed", "workflow.completed"]);
       const agents = new Map();
       const delegations = new Map();
       const channels = new Map();
       const messages = [];
+      const attention = [];
+      function roleRequiresRuntimeTermination(role) {{
+        return !workflowPersistentRoles.has(role || "") && !runPersistentRoles.has(role || "");
+      }}
+      function roleRequiresTerminationOnClose(role) {{
+        return workflowPersistentRoles.has(role || "");
+      }}
+      function addAttention(kind, severity, summary) {{
+        if (!attention.some((item) => item.kind === kind && item.severity === severity && item.summary === summary)) {{
+          attention.push({{ kind, severity, summary }});
+        }}
+      }}
       function agent(id) {{
         if (!id) return null;
-        if (!agents.has(id)) agents.set(id, {{ id, role: "", status: "active" }});
+        if (!agents.has(id)) agents.set(id, {{ id, role: "", status: "active", spawned_at: null, terminated_at: null, last_seen_at: null }});
         return agents.get(id);
       }}
       function isRolePlaceholderTarget(event) {{
@@ -229,6 +256,8 @@ def live_view_html(workflow_name: str) -> str:
         const payload = event.payload || {{}};
         const src = agent(event.source_agent_id);
         const dst = isRolePlaceholderTarget(event) ? null : agent(event.target_agent_id);
+        if (src) src.last_seen_at = event.timestamp;
+        if (dst) dst.last_seen_at = event.timestamp;
         if (event.event_type === "runtime.agent.spawned" && dst) {{
           dst.role = payload.role || dst.role;
           dst.status = "active";
@@ -237,10 +266,12 @@ def live_view_html(workflow_name: str) -> str:
         if (event.event_type === "runtime.agent.terminated" && dst) {{
           dst.status = "terminated";
           dst.terminated_at = event.timestamp;
+          dst.ended_reason = payload.ended_reason || payload.summary;
         }}
         if (event.delegation_id) {{
-          if (!delegations.has(event.delegation_id)) delegations.set(event.delegation_id, {{ id: event.delegation_id, status: "open" }});
+          if (!delegations.has(event.delegation_id)) delegations.set(event.delegation_id, {{ id: event.delegation_id, status: "open", events: [] }});
           const del = delegations.get(event.delegation_id);
+          del.events.push(event);
           del.source_agent_id = del.source_agent_id || event.source_agent_id;
           del.target_agent_id = del.target_agent_id || event.target_agent_id;
           del.workflow_step = del.workflow_step || event.workflow_step;
@@ -249,7 +280,11 @@ def live_view_html(workflow_name: str) -> str:
           if (event.event_type === "delegation.created") del.status = payload.status || "created";
           if (event.event_type === "binding.delegation_runtime_agent") del.runtime_agent_id = event.target_agent_id;
           if (event.event_type === "binding.delegation_channel") del.channel_id = event.channel_id;
-          if (["delegation.completed", "delegation.failed", "delegation.rejected"].includes(event.event_type)) del.status = payload.status || event.event_type.split(".").pop();
+          if (["delegation.completed", "delegation.failed", "delegation.rejected"].includes(event.event_type)) {{
+            del.status = payload.status || event.event_type.split(".").pop();
+            del.result = payload.result;
+            del.ended_at = event.timestamp;
+          }}
         }}
         if (event.channel_id) {{
           if (!channels.has(event.channel_id)) channels.set(event.channel_id, {{ id: event.channel_id, status: "open" }});
@@ -264,7 +299,65 @@ def live_view_html(workflow_name: str) -> str:
         if (event.event_type === "logical.message.sent") messages.push({{ id: event.event_id, kind: "event", ...event }});
       }}
       for (const transcript of transcripts) messages.push({{ id: transcript.message_id, kind: "transcript", ...transcript }});
-      return {{ agents: [...agents.values()], delegations: [...delegations.values()], channels: [...channels.values()], messages }};
+      for (const delegation of delegations.values()) {{
+        const eventTypes = new Set((delegation.events || []).map((event) => event.event_type));
+        const terminals = (delegation.events || []).map((event, index) => ({{ event, index }})).filter((item) => ["delegation.completed", "delegation.failed", "delegation.rejected"].includes(item.event.event_type));
+        if (!eventTypes.has("delegation.created") && terminals.length) {{
+          addAttention("lifecycle", "danger", `${{delegation.id}} has a terminal delegation event without delegation.created`);
+        }}
+        for (const requiredType of requiredDelegationEventTypes) {{
+          if (!eventTypes.has(requiredType)) {{
+            addAttention("lifecycle", "warning", `${{delegation.id}} missing required event: ${{requiredType}}`);
+          }}
+        }}
+        const runtimeAgent = delegation.runtime_agent_id ? agents.get(delegation.runtime_agent_id) : null;
+        const runtimeRole = delegation.target_role || (runtimeAgent ? runtimeAgent.role : "");
+        if (delegation.runtime_agent_id) {{
+          for (const terminal of terminals) {{
+            if (terminal.event.source_agent_id !== delegation.runtime_agent_id) {{
+              addAttention("lifecycle", "danger", `${{delegation.id}} terminal event source_agent_id ${{terminal.event.source_agent_id}} does not match bound runtime agent ${{delegation.runtime_agent_id}}`);
+            }}
+          }}
+        }}
+        if (terminals.length) {{
+          const terminalIndex = terminals[terminals.length - 1].index;
+          (delegation.events || []).forEach((event, index) => {{
+            if (index > terminalIndex && requiredDelegationEventTypes.has(event.event_type) && event.event_type !== "delegation.created") {{
+              addAttention("lifecycle", "danger", `${{delegation.id}} ${{event.event_type}} appears after terminal delegation event`);
+            }}
+          }});
+        }}
+        if (
+          ["completed", "failed", "rejected"].includes(delegation.status)
+          && runtimeAgent
+          && roleRequiresRuntimeTermination(runtimeRole)
+          && runtimeAgent.status !== "terminated"
+        ) {{
+          addAttention("lifecycle", "warning", `${{delegation.id}} ended as ${{delegation.status}} but runtime agent ${{delegation.runtime_agent_id}} has no runtime.agent.terminated event`);
+        }}
+        const channel = delegation.channel_id ? channels.get(delegation.channel_id) : null;
+        if (["completed", "failed", "rejected"].includes(delegation.status) && channel && channel.status !== "closed") {{
+          addAttention("lifecycle", "warning", `${{delegation.id}} ended as ${{delegation.status}} but channel ${{delegation.channel_id}} has no runtime.channel.closed event`);
+        }}
+      }}
+      for (const delegation of delegations.values()) {{
+        const terminals = (delegation.events || []).filter((event) => ["delegation.completed", "delegation.failed", "delegation.rejected"].includes(event.event_type));
+        for (const terminal of terminals) {{
+          const sourceAgent = terminal.source_agent_id ? agents.get(terminal.source_agent_id) : null;
+          if (["codex_main", "MainContext"].includes(terminal.source_agent_id)) continue;
+          if (sourceAgent && !sourceAgent.spawned_at && !sourceAgent.role) {{
+            addAttention("lifecycle", "warning", `${{terminal.source_agent_id}} produced a terminal event without runtime.agent.spawned evidence`);
+          }}
+        }}
+      }}
+      if (events.some((event) => workflowCloseEventTypes.has(event.event_type))) {{
+        for (const item of agents.values()) {{
+          if (roleRequiresTerminationOnClose(item.role) && item.status !== "terminated") {{
+            addAttention("lifecycle", "warning", `workflow close requires runtime.agent.terminated for ${{item.role}} ${{item.id}}`);
+          }}
+        }}
+      }}
+      return {{ agents: [...agents.values()], delegations: [...delegations.values()], channels: [...channels.values()], messages, attention }};
     }}
 
     function escapeHtml(value) {{
@@ -408,9 +501,11 @@ def live_view_html(workflow_name: str) -> str:
         ["Agents", graph.agents.length],
         ["Delegations", graph.delegations.length],
         ["Channels", graph.channels.length],
+        ["Attention", (graph.attention || []).length],
         ["Timeline", state.timeline.length]
       ].map(([label, value]) => `<div class="stat"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("");
       renderNodeGraph(graph);
+      attentionEl.innerHTML = (graph.attention || []).map((item) => `<div class="edge ${{item.severity || "warning"}}"><strong>${{item.kind || "attention"}}</strong><div class="meta">${{escapeHtml(item.summary || "")}}</div></div>`).join("") || "<p class='meta'>No attention items.</p>";
       agentsEl.innerHTML = graph.agents.map((agent) => `<div class="agent ${{agent.status || "active"}}"><strong>${{agent.id}}</strong><div class="meta">${{agent.role || ""}} ${{agent.status || ""}}</div></div>`).join("") || "<p class='meta'>No agents yet.</p>";
       edgesEl.innerHTML = [
         ...graph.delegations.map((item) => `<div class="edge ${{item.status || "open"}}"><strong>Delegation ${{item.id}}</strong><div class="meta">${{item.source_agent_id || ""}} -> ${{item.runtime_agent_id || item.target_role || ""}}<br>${{item.workflow_step || ""}} ${{item.status || ""}}</div></div>`),

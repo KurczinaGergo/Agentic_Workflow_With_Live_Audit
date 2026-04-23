@@ -6,6 +6,24 @@ from typing import Any
 
 
 TERMINAL_EVENT_TYPES = {"delegation.completed", "delegation.failed", "delegation.rejected"}
+REQUIRED_DELEGATION_EVENT_TYPES = {
+    "delegation.created",
+    "runtime.agent.spawned",
+    "binding.delegation_runtime_agent",
+    "runtime.channel.created",
+    "binding.delegation_channel",
+}
+RUN_PERSISTENT_ROLES = {"main_context"}
+WORKFLOW_PERSISTENT_ROLES = {"architect"}
+WORKFLOW_CLOSE_EVENT_TYPES = {"workflow.closed", "workflow.completed"}
+
+
+def role_requires_runtime_termination(role: str | None) -> bool:
+    return role not in RUN_PERSISTENT_ROLES | WORKFLOW_PERSISTENT_ROLES
+
+
+def role_requires_termination_on_close(role: str | None) -> bool:
+    return role in WORKFLOW_PERSISTENT_ROLES
 
 
 def utc_timestamp() -> str:
@@ -110,6 +128,24 @@ def group_by_delegation(events: list[dict]) -> dict[str, list[dict]]:
         if delegation_id:
             grouped[delegation_id].append(event)
     return dict(grouped)
+
+
+def first_event(events: list[dict], event_type: str) -> dict | None:
+    return next((event for event in events if event.get("event_type") == event_type), None)
+
+
+def terminal_events(events: list[dict]) -> list[tuple[int, dict]]:
+    return [
+        (index, event)
+        for index, event in enumerate(events)
+        if event.get("event_type") in TERMINAL_EVENT_TYPES
+    ]
+
+
+def append_attention_once(attention: list[dict], kind: str, severity: str, summary: str) -> None:
+    item = {"kind": kind, "severity": severity, "summary": summary}
+    if item not in attention:
+        attention.append(item)
 
 
 def derive_graph_state(events: list[dict], transcripts: list[dict]) -> dict:
@@ -276,6 +312,113 @@ def derive_graph_state(events: list[dict], transcripts: list[dict]) -> dict:
                 "summary": transcript.get("body"),
             }
         )
+
+    grouped = group_by_delegation(events)
+    for delegation_id, delegation_events in grouped.items():
+        created = first_event(delegation_events, "delegation.created")
+        terminals = terminal_events(delegation_events)
+        if created is None and terminals:
+            append_attention_once(
+                attention,
+                "lifecycle",
+                "danger",
+                f"{delegation_id} has a terminal delegation event without delegation.created",
+            )
+
+        present = {event.get("event_type") for event in delegation_events}
+        for required_event in sorted(REQUIRED_DELEGATION_EVENT_TYPES):
+            if required_event not in present:
+                append_attention_once(
+                    attention,
+                    "lifecycle",
+                    "warning",
+                    f"{delegation_id} missing required event: {required_event}",
+                )
+
+        delegation = delegations.get(delegation_id, {})
+        runtime_agent_id = delegation.get("runtime_agent_id")
+        runtime_agent = agents.get(runtime_agent_id) if runtime_agent_id else None
+        if runtime_agent_id:
+            for _, terminal_event in terminals:
+                if terminal_event.get("source_agent_id") != runtime_agent_id:
+                    append_attention_once(
+                        attention,
+                        "lifecycle",
+                        "danger",
+                        (
+                            f"{delegation_id} terminal event source_agent_id "
+                            f"{terminal_event.get('source_agent_id')} does not match bound runtime agent "
+                            f"{runtime_agent_id}"
+                        ),
+                    )
+
+        if terminals:
+            terminal_index = terminals[-1][0]
+            for index, event in enumerate(delegation_events):
+                if index <= terminal_index:
+                    continue
+                if event.get("event_type") in REQUIRED_DELEGATION_EVENT_TYPES - {"delegation.created"}:
+                    append_attention_once(
+                        attention,
+                        "lifecycle",
+                        "danger",
+                        f"{delegation_id} {event.get('event_type')} appears after terminal delegation event",
+                    )
+
+        if (
+            delegation.get("status") in {"completed", "failed", "rejected"}
+            and runtime_agent
+            and role_requires_runtime_termination(delegation.get("target_role") or runtime_agent.get("role"))
+            and runtime_agent.get("status") != "terminated"
+        ):
+            append_attention_once(
+                attention,
+                "lifecycle",
+                "warning",
+                (
+                    f"{delegation_id} ended as {delegation.get('status')} but runtime agent "
+                    f"{runtime_agent_id} has no runtime.agent.terminated event"
+                ),
+            )
+        channel_id = delegation.get("channel_id")
+        channel = channels.get(channel_id) if channel_id else None
+        if delegation.get("status") in {"completed", "failed", "rejected"} and channel and channel.get("status") != "closed":
+            append_attention_once(
+                attention,
+                "lifecycle",
+                "warning",
+                (
+                    f"{delegation_id} ended as {delegation.get('status')} but channel "
+                    f"{channel_id} has no runtime.channel.closed event"
+                ),
+            )
+
+    for _, terminal_event in [
+        item
+        for delegation_events in grouped.values()
+        for item in terminal_events(delegation_events)
+    ]:
+        source_agent_id = terminal_event.get("source_agent_id")
+        source_agent = agents.get(source_agent_id) if source_agent_id else None
+        if source_agent_id in {"codex_main", "MainContext"}:
+            continue
+        if source_agent and not source_agent.get("spawned_at") and not source_agent.get("role"):
+            append_attention_once(
+                attention,
+                "lifecycle",
+                "warning",
+                f"{source_agent_id} produced a terminal event without runtime.agent.spawned evidence",
+            )
+
+    if any(event.get("event_type") in WORKFLOW_CLOSE_EVENT_TYPES for event in events):
+        for agent in agents.values():
+            if role_requires_termination_on_close(agent.get("role")) and agent.get("status") != "terminated":
+                append_attention_once(
+                    attention,
+                    "lifecycle",
+                    "warning",
+                    f"workflow close requires runtime.agent.terminated for {agent.get('role')} {agent['id']}",
+                )
 
     timeline = sorted_timeline_items(events, transcripts)
     return {

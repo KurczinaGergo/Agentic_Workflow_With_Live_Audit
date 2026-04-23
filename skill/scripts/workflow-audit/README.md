@@ -56,6 +56,8 @@ Reconstruction is not acceptable for new runs. `workflow_log.jsonl` and `channel
 
 Pre-bind `delegation.created` events are allowed only as complete logical records. Include `payload.requested_by_role`, `payload.target_role`, compatibility `payload.role` matching `target_role`, and `payload.status` set to `created` or `pending_runtime_binding`; the same `delegation_id` must later receive matching runtime-agent and channel bindings. Later runtime, binding, logical message, and terminal events must set `target_agent_id`.
 
+After a terminal `delegation.completed`, `delegation.failed`, or `delegation.rejected`, append `runtime.channel.closed` for the delegation's bound channel. Ephemeral roles must also receive `runtime.agent.terminated` for the bound runtime agent; Architect stays active until final workflow shutdown, then its channel and runtime agent must be closed explicitly.
+
 Do not rewrite prior `workflow_log.jsonl` or `channels/*.jsonl` records to fit an audit result. Failed audits must be fixed through implementation changes, follow-up tasks, or an explicit developer-authorized audit-maintenance task. Protected edits to `skill/` or canonical audit JSONL require a prior `audit.protection.override` event emitted by `MainContext` with `payload.authorized_by: "developer"`, `payload.scope`, and a non-empty `payload.reason`.
 
 ## Validation And Derived Artifacts

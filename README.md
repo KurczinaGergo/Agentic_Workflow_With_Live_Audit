@@ -113,6 +113,7 @@ The workflow separates runtime control from logical ownership.
 - spawns agents
 - creates private pair channels
 - writes `runtime.*` and `binding.*` events
+- terminates ephemeral spawned agents after their delegations complete, fail, or are rejected
 - observes workflow state
 - handles recovery
 - bootstraps the Architect through a `main_context -> architect` delegation
@@ -161,6 +162,8 @@ Important event families:
 `delegation_id` is the primary trace key across events, channels, reports, and acceptance records.
 
 Pre-bind `delegation.created` events are valid logical records, not placeholders. They may use `target_agent_id: null` only when `payload.requested_by_role`, `payload.target_role`, compatibility `payload.role`, and a created/pending status are present, and a later runtime binding resolves the same `delegation_id`. Later runtime, binding, logical message, and terminal events must set `target_agent_id`.
+
+Terminal delegation events, runtime termination, and channel closure are separate. `delegation.completed`, `delegation.failed`, or `delegation.rejected` records the work outcome; later `runtime.agent.terminated` and `runtime.channel.closed` events record that `MainContext` actually closed the spawned agent and its pair channel. Persistent coordinators such as Architect stay alive while more workflow work may be assigned to them, and should only be terminated and channel-closed at final workflow shutdown.
 
 ## Audit Source Of Truth
 
