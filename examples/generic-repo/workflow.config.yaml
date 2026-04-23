@@ -19,7 +19,7 @@ decision_docs: []
 project_context_docs: []
 test_commands: []
 # Optional override. Leave null to use the bundled default policy next to the audit scripts.
-# role_policy: D:/Live_Audit_Log/skill/scripts/workflow-audit/workflow_policy.yaml
+# role_policy: <skill>/scripts/workflow-audit/workflow_policy.yaml
 role_policy: null
 artifact_naming:
   task_file_pattern: "{number}-{slug}.md"

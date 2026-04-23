@@ -34,7 +34,7 @@ Copy or link the `skill` folder into your Codex skills directory.
 Example:
 
 ```powershell
-Copy-Item -Recurse D:\Live_Audit_Log\skill $env:USERPROFILE\.codex\skills\agentic-workflow-audit
+Copy-Item -Recurse .\skill $env:USERPROFILE\.codex\skills\agentic-workflow-audit
 ```
 
 After that, ask Codex to use `agentic-workflow-audit` in a target repository.
@@ -44,13 +44,13 @@ After that, ask Codex to use `agentic-workflow-audit` in a target repository.
 Choose a profile and copy it into the target repository:
 
 ```powershell
-Copy-Item D:\Live_Audit_Log\examples\generic-repo\workflow.config.yaml .\workflow.config.yaml
+Copy-Item .\examples\generic-repo\workflow.config.yaml .\workflow.config.yaml
 ```
 
 For WorkTrace-style paths:
 
 ```powershell
-Copy-Item D:\Live_Audit_Log\examples\worktrace-style\workflow.config.yaml .\workflow.config.yaml
+Copy-Item .\examples\worktrace-style\workflow.config.yaml .\workflow.config.yaml
 ```
 
 Optional: copy the matching `AGENTS.example.md` content into the target repo's `AGENTS.md`.
@@ -93,7 +93,7 @@ All relative paths are resolved from the folder containing `workflow.config.yaml
 Initialize audit logging before spawning any workflow agents:
 
 ```powershell
-python D:\Live_Audit_Log\skill\scripts\workflow-audit\init_workflow_audit.py --config workflow.config.yaml
+python .\skill\scripts\workflow-audit\init_workflow_audit.py --config workflow.config.yaml
 ```
 
 Then ask Codex to run the workflow with the skill:
@@ -113,6 +113,7 @@ The workflow separates runtime control from logical ownership.
 - spawns agents
 - creates private pair channels
 - writes `runtime.*` and `binding.*` events
+- stays `run_persistent` for the full workflow run
 - terminates ephemeral spawned agents after their delegations complete, fail, or are rejected
 - observes workflow state
 - handles recovery
@@ -126,6 +127,7 @@ The Architect owns logical delivery:
 - accepts task handoffs
 - requests integration testing
 - requests documentation updates
+- stays `workflow_persistent` until final workflow shutdown
 
 The SW Technical Engineer owns one implementation task:
 
@@ -163,7 +165,7 @@ Important event families:
 
 Pre-bind `delegation.created` events are valid logical records, not placeholders. They may use `target_agent_id: null` only when `payload.requested_by_role`, `payload.target_role`, compatibility `payload.role`, and a created/pending status are present, and a later runtime binding resolves the same `delegation_id`. Later runtime, binding, logical message, and terminal events must set `target_agent_id`.
 
-Terminal delegation events, runtime termination, and channel closure are separate. `delegation.completed`, `delegation.failed`, or `delegation.rejected` records the work outcome; later `runtime.agent.terminated` and `runtime.channel.closed` events record that `MainContext` actually closed the spawned agent and its pair channel. Persistent coordinators such as Architect stay alive while more workflow work may be assigned to them, and should only be terminated and channel-closed at final workflow shutdown.
+Terminal delegation events, runtime termination, and channel closure are separate. `delegation.completed`, `delegation.failed`, or `delegation.rejected` records the logical work outcome only. After that terminal event, `MainContext` must append `runtime.channel.closed` for the bound pair channel. If the delegated role is `ephemeral`, `MainContext` must also append `runtime.agent.terminated` for the bound runtime agent. `workflow_persistent` coordinators such as Architect stay active after delegation completion and should be terminated only at final workflow shutdown; `run_persistent` `MainContext` remains active for the entire run.
 
 ## Audit Source Of Truth
 
@@ -177,7 +179,7 @@ Protected skill or canonical audit edits require explicit developer instruction 
 
 ```powershell
 $audit = ".workflow/audit/FEATURE_V1"
-$tools = "D:\Live_Audit_Log\skill\scripts\workflow-audit"
+$tools = ".\skill\scripts\workflow-audit"
 
 python $tools\check_policy.py --policy $tools\workflow_policy.yaml --log $audit\workflow_log.jsonl
 python $tools\generate_runtime_mermaid.py --log $audit\workflow_log.jsonl --out $audit\runtime_sequence.mmd
@@ -197,7 +199,7 @@ Open:
 Run:
 
 ```powershell
-python D:\Live_Audit_Log\skill\scripts\workflow-audit\serve_live_audit.py --config workflow.config.yaml --port 8765
+python .\skill\scripts\workflow-audit\serve_live_audit.py --config workflow.config.yaml --port 8765
 ```
 
 Open:
