@@ -228,3 +228,7 @@ python -m unittest discover -s skill\scripts\workflow-audit -p "test_*.py"
 - Keep role-specific communication in private pair channels.
 - Do not let non-main agents spawn other agents unless a role file explicitly allows it.
 - Keep target-repo language, framework, and domain rules in `workflow.config.yaml`, repo docs, and task files.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
