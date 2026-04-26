@@ -15,7 +15,7 @@ Canonical workflow-audit contracts and generators for reusable agentic workflow 
 
 - `event_schema.json`: top-level workflow event envelope.
 - `delegation_contract.json`: logical delegation contract.
-- `channel_contract.json`: pair-channel contract.
+- `channel_contract.json`: pair-channel transcript entry contract.
 - `workflow_policy.yaml`: default delegation graph and policy rules.
 - `workflow_config.py`: shared config and path resolver.
 - `init_workflow_audit.py`: initializes audit folders.
@@ -51,6 +51,8 @@ python skill/scripts/workflow-audit/init_workflow_audit.py --workflow-name FEATU
 ```
 
 If an appended workflow event or channel message omits `timestamp`, the append helper fills the current UTC timestamp. Supplying explicit timestamps is preferred for deterministic replay tests.
+
+Each channel transcript entry is a message envelope, not channel metadata. The required fields are `message_id`, `run_id`, `timestamp`, `delegation_id`, `channel_id`, `channel_kind`, `workflow_label`, `source_agent_id`, `target_agent_id`, `role`, `message_type`, `body`, `artifact_refs`, and `related_event_id`.
 
 Reconstruction is not acceptable for new runs. `workflow_log.jsonl` and `channels/*.jsonl` are expected to be append-only live artifacts written during execution.
 

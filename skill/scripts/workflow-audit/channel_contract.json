@@ -1,53 +1,70 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Agentic Workflow Channel Contract",
+  "title": "Agentic Workflow Channel Transcript Entry",
   "type": "object",
   "required": [
+    "message_id",
+    "run_id",
+    "timestamp",
+    "delegation_id",
     "channel_id",
-    "channel_type",
-    "logical_source_agent_id",
-    "logical_target_agent_id",
-    "runtime_created_by",
-    "purpose"
+    "channel_kind",
+    "workflow_label",
+    "source_agent_id",
+    "target_agent_id",
+    "role",
+    "message_type",
+    "body",
+    "artifact_refs",
+    "related_event_id"
   ],
   "properties": {
+    "message_id": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "delegation_id": {
+      "type": "string"
+    },
     "channel_id": {
       "type": "string"
     },
-    "channel_type": {
+    "channel_kind": {
       "type": "string"
     },
-    "created_for_relationship": {
+    "workflow_label": {
       "type": "string"
     },
-    "logical_source_agent_id": {
+    "source_agent_id": {
       "type": "string"
     },
-    "logical_target_agent_id": {
-      "type": "string"
-    },
-    "runtime_created_by": {
-      "type": "string"
-    },
-    "purpose": {
-      "type": "string"
-    },
-    "allowed_message_types": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "visibility": {
-      "type": "string"
-    },
-    "opened_at": {
+    "target_agent_id": {
       "type": [
         "string",
         "null"
       ]
     },
-    "closed_at": {
+    "role": {
+      "type": "string"
+    },
+    "message_type": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_event_id": {
       "type": [
         "string",
         "null"
